@@ -1,0 +1,11 @@
+aiogram==3.29.1
+Django==5.2.15
+psycopg[binary]==3.3.4
+pandas==3.0.2
+openpyxl==3.1.5
+APScheduler==3.11.3
+anthropic==0.116.0
+pydantic-settings==2.14.2
+asgiref==3.10.0
+pytest==8.4.2
+pytest-django==4.12.0

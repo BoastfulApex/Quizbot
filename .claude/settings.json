@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python manage.py *)",
+      "Bash(pytest *)",
+      "Bash(pip install *)",
+      "Read(./**)",
+      "Edit(./bot/**)",
+      "Edit(./apps/**)",
+      "Edit(./services/**)",
+      "Edit(./tests/**)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)"
+    ]
+  },
+  "env": {
+    "DJANGO_SETTINGS_MODULE": "core.settings"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post_edit_check.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
