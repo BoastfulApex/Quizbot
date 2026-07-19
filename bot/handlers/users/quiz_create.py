@@ -11,21 +11,22 @@ from bot.keyboards.inline.quiz_inline import (
     get_visibility_keyboard,
 )
 from bot.states.quiz_states import QuizCreateStates
+from bot.utils.limits import (
+    MAX_CATEGORY_LEN,
+    MAX_DESC_LEN,
+    MAX_DIFFICULTY_LEN,
+    MAX_EXPLANATION_LEN,
+    MAX_OPTION_LEN,
+    MAX_QUESTION_LEN,
+    MAX_TIME_PER_QUESTION_SEC,
+    MAX_TITLE_LEN,
+    MIN_TIME_PER_QUESTION_SEC,
+)
 from bot.utils.texts import GUIDE_CREATE_QUIZ
 from services.quiz_service import add_question, count_questions, create_quiz
 from services.user_service import get_or_create_user
 
 router = Router(name="quiz_create")
-
-MAX_TITLE_LEN = 255
-MAX_DESC_LEN = 1000
-MAX_CATEGORY_LEN = 100
-MAX_DIFFICULTY_LEN = 20
-MAX_QUESTION_LEN = 250
-MAX_OPTION_LEN = 100
-MAX_EXPLANATION_LEN = 200
-MIN_TIME_PER_QUESTION_SEC = 5
-MAX_TIME_PER_QUESTION_SEC = 120
 
 
 @router.message(F.text == BTN_CREATE_QUIZ, StateFilter(None))

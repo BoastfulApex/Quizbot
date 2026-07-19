@@ -11,6 +11,7 @@ from services.quiz_service import (
     finish_session,
     get_group_shared_quizzes,
     get_questions_for_quiz,
+    get_quizzes_created_by,
     get_session_ranking,
     get_session_stats,
     get_user_and_public_quizzes,
@@ -297,3 +298,29 @@ def test_get_session_ranking_returns_none_for_missing_session():
     result = asyncio.run(get_session_ranking(999999))
 
     assert result is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_get_quizzes_created_by_returns_own_quizzes(user):
+    q1 = Quiz.objects.create(title="Mening 1", created_by=user)
+    q2 = Quiz.objects.create(title="Mening 2", created_by=user)
+
+    result = asyncio.run(get_quizzes_created_by(user.id))
+    ids = {q.id for q in result}
+
+    assert q1.id in ids
+    assert q2.id in ids
+
+
+@pytest.mark.django_db(transaction=True)
+def test_get_quizzes_created_by_excludes_others_public(user, other_user):
+    Quiz.objects.create(
+        title="Boshqa public",
+        created_by=other_user,
+        visibility=Quiz.Visibility.PUBLIC,
+        moderation_status=Quiz.ModerationStatus.APPROVED,
+    )
+
+    result = asyncio.run(get_quizzes_created_by(user.id))
+
+    assert result == []

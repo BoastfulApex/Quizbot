@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from apps.moderation.models import AiGenerationLog, ImportLog, Report
+from apps.moderation.models import AiGenerationLog, ImportLimitSettings, ImportLog, Report
+
+
+@admin.register(ImportLimitSettings)
+class ImportLimitSettingsAdmin(admin.ModelAdmin):
+    list_display = ("max_files_per_day", "max_rows_per_file", "updated_at")
+
+    def has_add_permission(self, request):
+        return not ImportLimitSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ImportLog)

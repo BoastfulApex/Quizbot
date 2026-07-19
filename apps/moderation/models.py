@@ -4,6 +4,34 @@ from apps.quizzes.models import Quiz
 from apps.users.models import User
 
 
+class ImportLimitSettings(models.Model):
+    SINGLETON_ID = 1
+
+    max_files_per_day = models.PositiveIntegerField(default=3)
+    max_rows_per_file = models.PositiveIntegerField(default=5000)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "import_limit_settings"
+        verbose_name = "Import limiti sozlamalari"
+        verbose_name_plural = "Import limiti sozlamalari"
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_ID
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls) -> "ImportLimitSettings":
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
+        return obj
+
+    def __str__(self):
+        return f"Import limiti: {self.max_files_per_day} fayl/kun, {self.max_rows_per_file} qator/fayl"
+
+
 class ImportLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="import_logs")
     filename = models.CharField(max_length=255)

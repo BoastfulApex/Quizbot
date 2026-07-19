@@ -20,6 +20,7 @@ def create_quiz(
     difficulty: str = "",
     visibility: str = Quiz.Visibility.PRIVATE,
     time_per_question_sec: int = 30,
+    source: str = Quiz.Source.MANUAL,
 ) -> Quiz | None:
     try:
         return Quiz.objects.create(
@@ -30,7 +31,7 @@ def create_quiz(
             difficulty=difficulty,
             visibility=visibility,
             time_per_question_sec=time_per_question_sec,
-            source=Quiz.Source.MANUAL,
+            source=source,
         )
     except (IntegrityError, DatabaseError):
         logger.exception("create_quiz xato: created_by=%s, title=%s", created_by.id, title)
@@ -77,6 +78,15 @@ def count_questions(quiz_id: int) -> int:
     except DatabaseError:
         logger.exception("count_questions xato: quiz_id=%s", quiz_id)
         return 0
+
+
+@sync_to_async
+def get_quizzes_created_by(user_id: int) -> list[Quiz]:
+    try:
+        return list(Quiz.objects.filter(created_by_id=user_id, is_active=True).order_by("-created_at"))
+    except DatabaseError:
+        logger.exception("get_quizzes_created_by xato: user_id=%s", user_id)
+        return []
 
 
 @sync_to_async

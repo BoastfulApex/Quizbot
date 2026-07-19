@@ -9,6 +9,7 @@ import django
 django.setup()
 
 from bot.handlers.admins.admin import router as admin_router
+from bot.handlers.users.import_handler import router as import_router
 from bot.handlers.users.inline_query import router as inline_query_router
 from bot.handlers.users.leaderboard import router as leaderboard_router
 from bot.handlers.users.quiz import router as quiz_router
@@ -21,6 +22,7 @@ from bot.loader import bot, dp
 def register_routers() -> None:
     dp.include_router(start_router)
     dp.include_router(quiz_create_router)
+    dp.include_router(import_router)
     dp.include_router(quiz_router)
     dp.include_router(leaderboard_router)
     dp.include_router(settings_router)
