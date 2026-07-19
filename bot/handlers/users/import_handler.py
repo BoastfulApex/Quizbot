@@ -3,11 +3,12 @@ import logging
 import time
 from io import BytesIO
 
+import openpyxl
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from apps.quizzes.models import Quiz
 from bot.keyboards.inline.import_inline import ImportTargetCallback, get_import_target_keyboard
@@ -137,7 +138,7 @@ async def prompt_visibility_fallback_import(message: Message) -> None:
 
 
 @router.callback_query(VisibilityCallback.filter(), ImportStates.new_quiz_visibility)
-async def process_import_visibility(callback: CallbackQuery, callback_data: VisibilityCallback, state: FSMContext) -> None:
+async def process_import_visibility(callback: CallbackQuery, callback_data: VisibilityCallback, state: FSMContext, bot: Bot) -> None:
     await callback.answer()
     user = await get_or_create_user(callback.from_user.id, callback.from_user.username)
     if user is None:
@@ -157,7 +158,7 @@ async def process_import_visibility(callback: CallbackQuery, callback_data: Visi
         await state.clear()
         return
     await state.update_data(quiz_id=quiz.id, quiz_title=quiz.title)
-    blocked = await _check_limit_and_set_file_state(callback.message, state, callback.from_user.id, edit=True)
+    blocked = await _check_limit_and_set_file_state(callback.message, state, callback.from_user.id, bot, edit=True)
     if blocked:
         return
 
@@ -165,7 +166,7 @@ async def process_import_visibility(callback: CallbackQuery, callback_data: Visi
 # --- mavjud test tanlash ---
 
 @router.callback_query(QuizSelectCallback.filter(), ImportStates.choosing_existing_quiz)
-async def process_existing_quiz_select(callback: CallbackQuery, callback_data: QuizSelectCallback, state: FSMContext) -> None:
+async def process_existing_quiz_select(callback: CallbackQuery, callback_data: QuizSelectCallback, state: FSMContext, bot: Bot) -> None:
     await callback.answer()
     quiz = await get_quiz_by_id(callback_data.quiz_id)
     if quiz is None:
@@ -178,7 +179,7 @@ async def process_existing_quiz_select(callback: CallbackQuery, callback_data: Q
         await state.clear()
         return
     await state.update_data(quiz_id=quiz.id, quiz_title=quiz.title)
-    blocked = await _check_limit_and_set_file_state(callback.message, state, callback.from_user.id, edit=True)
+    blocked = await _check_limit_and_set_file_state(callback.message, state, callback.from_user.id, bot, edit=True)
     if blocked:
         return
 
@@ -275,7 +276,33 @@ async def awaiting_file_fallback(message: Message) -> None:
 
 # --- yordamchi funksiyalar ---
 
-async def _check_limit_and_set_file_state(message, state: FSMContext, tg_user_id: int, edit: bool = False) -> bool:
+def _make_sample_xlsx() -> BytesIO:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Savollar"
+    ws.append(["savol", "variant_a", "variant_b", "variant_c", "variant_d", "togri_javob", "izoh", "qiyinlik"])
+    ws.append([
+        "O'zbekistonning poytaxti qaysi shahar?",
+        "Toshkent", "Samarqand", "Buxoro", "Namangan",
+        "A", "O'zbekiston poytaxti — Toshkent", "oson",
+    ])
+    ws.append([
+        "Yer sayyorasi quyosh atrofida necha kunda aylanadi?",
+        "365", "360", "366", "370",
+        "A", "Aniqrog'i 365.25 kun", "o'rta",
+    ])
+    ws.append([
+        "Suvning kimyoviy formulasi nima?",
+        "H2O", "CO2", "O2", "NaCl",
+        "A", "", "oson",
+    ])
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+async def _check_limit_and_set_file_state(message, state: FSMContext, tg_user_id: int, bot: Bot, edit: bool = False) -> bool:
     user = await get_or_create_user(tg_user_id, None)
     if user is None:
         text = "❌ Foydalanuvchi topilmadi."
@@ -309,6 +336,13 @@ async def _check_limit_and_set_file_state(message, state: FSMContext, tg_user_id
         await message.edit_text(text, parse_mode="HTML")
     else:
         await message.answer(text, parse_mode="HTML")
+
+    sample = _make_sample_xlsx()
+    await bot.send_document(
+        chat_id=message.chat.id,
+        document=BufferedInputFile(sample.read(), filename="namuna.xlsx"),
+        caption="📋 Namuna fayl. Shu ustun nomlarini saqlagan holda faylni to'ldiring.",
+    )
     return False
 
 
