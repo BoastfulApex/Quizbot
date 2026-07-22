@@ -28,3 +28,30 @@ def get_or_create_user(telegram_id: int, username: str | None) -> User | None:
 
 def is_admin_role(user: User) -> bool:
     return user.role in (User.Role.ADMIN, User.Role.SUPER_ADMIN)
+
+
+@sync_to_async
+def get_user_settings(user_id: int) -> UserSettings | None:
+    try:
+        settings_obj, _ = UserSettings.objects.get_or_create(user_id=user_id)
+        return settings_obj
+    except DatabaseError:
+        logger.exception("get_user_settings xato: user_id=%s", user_id)
+        return None
+
+
+@sync_to_async
+def toggle_user_setting(user_id: int, field: str) -> UserSettings | None:
+    allowed_fields = {"hide_share_button", "notifications_on"}
+    if field not in allowed_fields:
+        logger.warning("toggle_user_setting: noto'g'ri maydon=%s", field)
+        return None
+    try:
+        settings_obj, _ = UserSettings.objects.get_or_create(user_id=user_id)
+        current = getattr(settings_obj, field)
+        setattr(settings_obj, field, not current)
+        settings_obj.save(update_fields=[field])
+        return settings_obj
+    except DatabaseError:
+        logger.exception("toggle_user_setting xato: user_id=%s, field=%s", user_id, field)
+        return None
