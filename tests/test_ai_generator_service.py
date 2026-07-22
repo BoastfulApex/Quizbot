@@ -97,6 +97,24 @@ def test_generate_questions_returns_valid_list():
     assert "difficulty" in result[0]
 
 
+def test_generate_questions_with_material_passes_material_in_prompt():
+    mock_message = _make_mock_message(_SAMPLE_QUESTIONS)
+    mock_stream = _make_mock_stream(mock_message)
+
+    mock_client = MagicMock()
+    mock_client.messages.stream.return_value = mock_stream
+
+    material = "Bu O'zbekiston tarixi haqida matn. Toshkent poytaxt."
+
+    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+        result = asyncio.run(generate_questions(topic="Tarix", count=2, material=material))
+
+    assert len(result) == 2
+    call_kwargs = mock_client.messages.stream.call_args.kwargs
+    user_message = call_kwargs["messages"][0]["content"]
+    assert material in user_message
+
+
 def test_generate_questions_skips_invalid_correct_option():
     bad_questions = [
         {

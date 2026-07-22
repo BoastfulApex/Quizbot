@@ -13,14 +13,15 @@ logger = logging.getLogger(__name__)
 
 _MODEL = "claude-opus-4-8"
 _VALID_OPTIONS = {"A", "B", "C", "D"}
+_MAX_MATERIAL_CHARS = 12_000
 
 _SYSTEM_PROMPT = (
     "Sen test savollari yaratuvchi yordamchisan. "
-    "Foydalanuvchi so'ragan mavzu bo'yicha o'zbek tilida test savollari yaratasan. "
+    "O'zbek tilida test savollari yaratasan. "
     "Faqat so'ralgan JSON formatida javob berasan — boshqa hech qanday matn yozma."
 )
 
-_USER_PROMPT_TEMPLATE = """Quyidagi mavzu bo'yicha {count} ta test savoli yarat: {topic}
+_TOPIC_PROMPT_TEMPLATE = """Quyidagi mavzu bo'yicha {count} ta test savoli yarat: {topic}
 
 Faqat quyidagi JSON massiv formatida qaytarib ber (boshqa hech narsa yozma):
 [
@@ -42,10 +43,48 @@ Qoidalar:
 - O'zbek tilida yoz
 """
 
+_MATERIAL_PROMPT_TEMPLATE = """Quyidagi matn asosida {count} ta test savoli yarat:
 
-async def generate_questions(topic: str, count: int, model: str = _MODEL) -> list[dict]:
+--- MATN BOSHI ---
+{material}
+--- MATN OXIRI ---
+
+Faqat quyidagi JSON massiv formatida qaytarib ber (boshqa hech narsa yozma):
+[
+  {{
+    "question": "Savol matni (maksimal 250 belgi)",
+    "option_a": "A varianti (maksimal 100 belgi)",
+    "option_b": "B varianti (maksimal 100 belgi)",
+    "option_c": "C varianti (maksimal 100 belgi)",
+    "option_d": "D varianti (maksimal 100 belgi)",
+    "correct_option": "A",
+    "explanation": "Izoh (maksimal 200 belgi, ixtiyoriy)"
+  }}
+]
+
+Qoidalar:
+- Faqat yuqoridagi matn mazmuniga asoslanib savol tuz
+- Faqat JSON massiv qaytargin
+- correct_option faqat "A", "B", "C" yoki "D" bo'lsin
+- O'zbek tilida yoz
+"""
+
+
+async def generate_questions(
+    topic: str,
+    count: int,
+    model: str = _MODEL,
+    material: str | None = None,
+) -> list[dict]:
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-    prompt = _USER_PROMPT_TEMPLATE.format(count=count, topic=topic)
+
+    if material:
+        prompt = _MATERIAL_PROMPT_TEMPLATE.format(
+            count=count,
+            material=material[:_MAX_MATERIAL_CHARS],
+        )
+    else:
+        prompt = _TOPIC_PROMPT_TEMPLATE.format(count=count, topic=topic)
 
     async with client.messages.stream(
         model=model,
