@@ -8,6 +8,9 @@ SECRET_KEY = settings.DJANGO_SECRET_KEY
 DEBUG = settings.DJANGO_DEBUG
 ALLOWED_HOSTS = settings.DJANGO_ALLOWED_HOSTS
 
+CSRF_TRUSTED_ORIGINS = ["https://quizzes.boastful.uz", "http://quizzes.boastful.uz"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
