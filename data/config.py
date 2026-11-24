@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str
     ADMIN_IDS: Annotated[list[int], NoDecode] = []
-    ANTHROPIC_API_KEY: str
+    GEMINI_API_KEY: str
 
     POSTGRES_DB: str
     POSTGRES_USER: str

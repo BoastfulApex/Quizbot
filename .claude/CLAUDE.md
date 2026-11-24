@@ -1,40 +1,68 @@
 # QuizBot — loyiha konteksti
 
 ## Nima bu loyiha
-Telegram test-viktorina boti. Har qanday foydalanuvchi test yarata oladi (UGC model),
-Excel/CSV import, AI orqali mavzudan savol generatsiya, avtomatik rejalashtirish,
-guruhga share/unshare, va Django asosidagi web admin panel.
+Telegram test-viktorina boti (UGC model): test yaratish, Excel/CSV/DOCX/PDF/PPTX import,
+AI orqali savol generatsiya, avtomatik rejalashtirish, guruhga share/unshare,
+va Django asosidagi web admin panel.
 
 ## Stack
-- **Bot:** Python 3.12, aiogram 3.x (async, polling)
-- **Web admin:** Django 5.x + PostgreSQL (bitta umumiy baza, bot va admin panel bir xil
-  Django ORM modellaridan foydalanadi — `apps/*/models.py` yagona manba)
-- **AI:** Anthropic Claude API (savol generatsiyasi uchun)
-- **Fayl import:** pandas, openpyxl
-- **Rejalashtirish:** APScheduler
+- **Bot:** Python 3.14, aiogram 3.29 (async, polling)
+- **Web admin:** Django 5.2 + PostgreSQL — `apps/*/models.py` yagona manba
+- **AI:** Anthropic Claude API (`claude-opus-4-8`, streaming + adaptive thinking)
+- **Fayl import:** pandas, openpyxl, python-docx, pypdf, python-pptx
+- **Rejalashtirish:** APScheduler 3.x
+- **Test:** pytest + pytest-django (65 test, 0 xato)
 
-## Muhim arxitektura qarorlari (nega shunday qilingan)
-1. **Django ORM yagona manba.** aiogram tomonida SQLAlchemy YO'Q — bot Django modellariga
-   `sync_to_async` orqali kiradi (`services/*.py` ichida). Sabab: ikkita ORM bir xil jadval
-   bilan ishlasa, migratsiya konflikti va sxema desinxronizatsiyasi paydo bo'ladi.
-2. **`services/` — domen bo'yicha ajratilgan.** Har bir fayl bitta mas'uliyat: `quiz_service.py`,
-   `import_service.py`, `ai_generator_service.py`, `share_service.py`, `scheduler_service.py`,
-   `moderation_service.py`. Bitta "god file" (`database.py` ichida hammasi) qilinmaydi —
-   buni oldingi loyiha (KpiProject) tahlilida aniq kamchilik sifatida ko'rgan edik.
-3. **Egalik tekshiruvi majburiy.** Har bir test `created_by` ga ega. Har bir yozish/o'chirish/
-   share amali oldidan `created_by == current_user_id` (yoki admin) tekshiriladi —
-   `bot/middlewares/ownership_check.py` va `services/share_service.py` da markazlashgan.
-4. **Share faqat test egasiga tegishli.** Boshqa hech kim (hatto testni ishlagan bo'lsa ham)
-   guruhga share qila olmaydi. `group_shared_quizzes` jadvalida `UNIQUE(chat_id, quiz_id)`.
-5. **Bot guruhga a'zo bo'lishi shart** — guruh ichida `/startTest` yoki umumiy reyting
-   ishlashi uchun (Telegram Bot API cheklovi).
+## Yo'llar
+| Nima | Yo'l |
+|---|---|
+| Kod | `D:/Python/Projects/Quizbot` |
+| Vault | `D:/ObsidianVault/QuizBot` |
+| Qoidalar | `.claude/rules/` |
+| TZ | `docs/TZ.md` |
+
+## Sessiya tartibi
+1. Sessiya boshida `D:/ObsidianVault/QuizBot/_holat.md` ni o'qi
+2. `arxiv/` ni faqat so'ralganda o'qi
+3. Muhim ishdan keyin `/save` ni taklif qil
+4. Arxitektura qarori bo'lsa `/decision` ni chaqir
+
+## Muhim arxitektura qarorlari
+1. **Django ORM yagona manba** — aiogram tarafida SQLAlchemy YO'Q; bot `services/*.py`
+   ichida `sync_to_async` orqali Django modellariga kiradi.
+2. **`services/` domen bo'yicha** — `quiz_service`, `import_service`, `ai_generator_service`,
+   `share_service`, `scheduler_service`, `moderation_service`, `user_service`. God file yo'q.
+3. **Egalik tekshiruvi majburiy** — yozish/o'chirish/share oldidan `created_by == user_id`
+   yoki admin. `bot/middlewares/ownership_check.py` va servis darajasida markazlashgan.
+4. **Share faqat test egasiga** — `group_shared_quizzes.UNIQUE(chat_id, quiz_id)`.
+5. **Bot guruhga a'zo bo'lishi shart** — `/startTest` va reyting uchun.
 
 ## Kodlash konventsiyalari
-- Har bir DB/servis funksiyasi **aniq exception handling** bilan yoziladi — `except: pass`
-  yoki `print(e)` ISHLATILMAYDI, doim `logging.exception(...)` orqali log qilinadi.
-- Vaqtinchalik/eskirgan kod (`# commented out`, `.bak` fayllar) repo'ga commit qilinmaydi.
-- Har bir yangi funksiya uchun `tests/` da mos test fayli kutiladi.
+- `except: pass` yoki `print(e)` **TAQIQLANADI** — doim `logging.exception(...)`.
+- Har bir yangi `services/*.py` funksiyasi uchun `tests/` da mos test.
+- `.bak` va commented-out bloklar commit qilinmaydi.
+- Migratsiya: `python manage.py makemigrations <app>` (aniq app nomi).
 
-## To'liq talablar
-Batafsil funksional/nofunksional talablar uchun: `docs/TZ.md` ga qarang (agar mavjud bo'lsa),
-yoki suhbat tarixidagi TZ hujjatiga murojaat qiling.
+## Buyruqlar
+| Buyruq | Fayl | Nima qiladi |
+|---|---|---|
+| `/save` | `commands/save.md` | Vault'ga sessiya logi + `_holat.md` yangilash |
+| `/decision` | `commands/decision.md` | `decisions/` ga arxitektura qarori yozish |
+| `/fix-and-build` | `commands/fix-and-build.md` | Sintaks + testlarni tuzatish va ishga tushirish |
+| `/test` | `commands/test.md` | Testlarni ishga tushirish |
+| `/add-handler` | `commands/add-handler.md` | Yangi aiogram handler qo'shish |
+| `/add-admin-endpoint` | `commands/add-admin-endpoint.md` | Django admin endpoint qo'shish |
+
+## Skills
+| Skill | Nima uchun |
+|---|---|
+| `django-aiogram-hybrid` | `sync_to_async` pattern, bitta ORM qoidasi |
+| `excel-import` | Import validatsiya tartibi, ustun formati |
+| `ai-generate` | Anthropic streaming + JSON parse pattern |
+
+## Agentlar
+| Agent | Vazifa |
+|---|---|
+| `backend-reviewer` | services/, apps/, bot/ — arxitektura va xavfsizlik ko'rib chiqish |
+| `telegram-bot-architect` | Yangi bot funksiyasi loyihalashtirish |
+| `reviewer` | Faqat o'qish — topilmalarni `fayl:qator + ssenariy` bilan beradi |

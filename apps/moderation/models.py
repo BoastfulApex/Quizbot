@@ -4,6 +4,66 @@ from apps.quizzes.models import Quiz
 from apps.users.models import User
 
 
+class AiProviderSettings(models.Model):
+    class Provider(models.TextChoices):
+        GEMINI = "gemini", "Google Gemini"
+        CLAUDE = "claude", "Anthropic Claude"
+        OPENAI = "openai", "OpenAI GPT"
+
+    SINGLETON_ID = 1
+
+    active_provider = models.CharField(
+        max_length=20, choices=Provider.choices, default=Provider.GEMINI,
+        verbose_name="Faol AI provayder",
+    )
+    gemini_api_key = models.CharField(max_length=500, blank=True, verbose_name="Gemini API kaliti")
+    gemini_model = models.CharField(max_length=100, default="gemini-2.0-flash", verbose_name="Gemini modeli")
+    claude_api_key = models.CharField(max_length=500, blank=True, verbose_name="Claude API kaliti")
+    claude_model = models.CharField(max_length=100, default="claude-opus-4-8", verbose_name="Claude modeli")
+    openai_api_key = models.CharField(max_length=500, blank=True, verbose_name="OpenAI API kaliti")
+    openai_model = models.CharField(max_length=100, default="gpt-4o", verbose_name="OpenAI modeli")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_provider_settings"
+        verbose_name = "AI provayder sozlamalari"
+        verbose_name_plural = "AI provayder sozlamalari"
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_ID
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls) -> "AiProviderSettings":
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
+        return obj
+
+    def __str__(self):
+        return f"AI sozlamalari ({self.get_active_provider_display()})"
+
+
+class BotGroup(models.Model):
+    chat_id = models.BigIntegerField(unique=True, db_index=True, verbose_name="Chat ID")
+    title = models.CharField(max_length=255, verbose_name="Guruh nomi")
+    username = models.CharField(max_length=255, blank=True, null=True, verbose_name="Username")
+    member_count = models.PositiveIntegerField(default=0, verbose_name="A'zolar soni")
+    is_active = models.BooleanField(default=True, verbose_name="Bot guruhda")
+    added_at = models.DateTimeField(auto_now_add=True, verbose_name="Qo'shilgan vaqt")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "bot_groups"
+        verbose_name = "Guruh"
+        verbose_name_plural = "Guruhlar"
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        return self.title or str(self.chat_id)
+
+
 class ImportLimitSettings(models.Model):
     SINGLETON_ID = 1
 

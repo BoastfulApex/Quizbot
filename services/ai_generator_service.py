@@ -2,16 +2,17 @@ import json
 import logging
 
 import anthropic
+import openai
 from asgiref.sync import sync_to_async
 from django.db import DatabaseError
+from google import genai
+from google.genai import types
 
-from apps.moderation.models import AiGenerationLog
+from apps.moderation.models import AiGenerationLog, AiProviderSettings
 from bot.utils.limits import MAX_EXPLANATION_LEN, MAX_OPTION_LEN, MAX_QUESTION_LEN
-from data.config import settings
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "claude-opus-4-8"
 _VALID_OPTIONS = {"A", "B", "C", "D"}
 _MAX_MATERIAL_CHARS = 12_000
 
@@ -70,41 +71,12 @@ Qoidalar:
 """
 
 
-async def generate_questions(
-    topic: str,
-    count: int,
-    model: str = _MODEL,
-    material: str | None = None,
-) -> list[dict]:
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+@sync_to_async
+def _load_ai_settings() -> AiProviderSettings:
+    return AiProviderSettings.load()
 
-    if material:
-        prompt = _MATERIAL_PROMPT_TEMPLATE.format(
-            count=count,
-            material=material[:_MAX_MATERIAL_CHARS],
-        )
-    else:
-        prompt = _TOPIC_PROMPT_TEMPLATE.format(count=count, topic=topic)
 
-    async with client.messages.stream(
-        model=model,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        message = await stream.get_final_message()
-
-    text = ""
-    for block in message.content:
-        if block.type == "text":
-            text = block.text
-            break
-
-    if not text:
-        logger.error("generate_questions: API bo'sh javob qaytardi, topic=%s", topic)
-        return []
-
+def _parse_questions(text: str, topic: str) -> list[dict]:
     start = text.find("[")
     end = text.rfind("]") + 1
     if start == -1 or end == 0:
@@ -152,19 +124,108 @@ async def generate_questions(
     return valid
 
 
+async def _generate_gemini(prompt: str, model: str, api_key: str) -> str:
+    client = genai.Client(api_key=api_key)
+    response = await client.aio.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT,
+            temperature=0.7,
+            max_output_tokens=8000,
+        ),
+    )
+    return response.text or ""
+
+
+async def _generate_claude(prompt: str, model: str, api_key: str) -> str:
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    async with client.messages.stream(
+        model=model,
+        max_tokens=8000,
+        thinking={"type": "adaptive"},
+        system=_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        message = await stream.get_final_message()
+    for block in message.content:
+        if block.type == "text":
+            return block.text
+    return ""
+
+
+async def _generate_openai(prompt: str, model: str, api_key: str) -> str:
+    client = openai.AsyncOpenAI(api_key=api_key)
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=8000,
+        temperature=0.7,
+    )
+    return response.choices[0].message.content or ""
+
+
+async def generate_questions(
+    topic: str,
+    count: int,
+    material: str | None = None,
+) -> list[dict]:
+    ai_settings = await _load_ai_settings()
+    provider = ai_settings.active_provider
+
+    if material:
+        prompt = _MATERIAL_PROMPT_TEMPLATE.format(
+            count=count,
+            material=material[:_MAX_MATERIAL_CHARS],
+        )
+    else:
+        prompt = _TOPIC_PROMPT_TEMPLATE.format(count=count, topic=topic)
+
+    text = ""
+    if provider == AiProviderSettings.Provider.GEMINI:
+        if not ai_settings.gemini_api_key:
+            logger.error("generate_questions: Gemini API kaliti yo'q")
+            return []
+        text = await _generate_gemini(prompt, ai_settings.gemini_model, ai_settings.gemini_api_key)
+    elif provider == AiProviderSettings.Provider.CLAUDE:
+        if not ai_settings.claude_api_key:
+            logger.error("generate_questions: Claude API kaliti yo'q")
+            return []
+        text = await _generate_claude(prompt, ai_settings.claude_model, ai_settings.claude_api_key)
+    elif provider == AiProviderSettings.Provider.OPENAI:
+        if not ai_settings.openai_api_key:
+            logger.error("generate_questions: OpenAI API kaliti yo'q")
+            return []
+        text = await _generate_openai(prompt, ai_settings.openai_model, ai_settings.openai_api_key)
+
+    if not text:
+        logger.error("generate_questions: API bo'sh javob qaytardi, topic=%s", topic)
+        return []
+
+    return _parse_questions(text, topic)
+
+
 @sync_to_async
 def create_ai_log(
     user_id: int,
     topic: str,
     questions_count: int,
-    model: str = _MODEL,
 ) -> AiGenerationLog | None:
     try:
+        ai_settings = AiProviderSettings.load()
+        model_label = {
+            "gemini": ai_settings.gemini_model,
+            "claude": ai_settings.claude_model,
+            "openai": ai_settings.openai_model,
+        }.get(ai_settings.active_provider, "unknown")
         return AiGenerationLog.objects.create(
             user_id=user_id,
             topic=topic,
             questions_count=questions_count,
-            model_used=model,
+            model_used=f"{ai_settings.active_provider}/{model_label}",
         )
     except DatabaseError:
         logger.exception("create_ai_log xato: user_id=%s, topic=%s", user_id, topic)

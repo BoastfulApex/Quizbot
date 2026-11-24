@@ -2,17 +2,34 @@
   "permissions": {
     "allow": [
       "Bash(python manage.py *)",
-      "Bash(pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(python -m py_compile *)",
       "Bash(pip install *)",
+      "Bash(pip list*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git commit*)",
       "Read(./**)",
       "Edit(./bot/**)",
       "Edit(./apps/**)",
       "Edit(./services/**)",
-      "Edit(./tests/**)"
+      "Edit(./tests/**)",
+      "Edit(./.claude/**)",
+      "Write(./.claude/**)",
+      "Edit(./requirements.txt)",
+      "Edit(./docs/**)",
+      "Write(./docs/**)"
     ],
     "deny": [
+      "Read(**/.env*)",
       "Bash(rm -rf *)",
-      "Bash(git push --force*)"
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean *)",
+      "Bash(git checkout -- *)",
+      "Bash(git restore *)"
     ]
   },
   "env": {
@@ -21,11 +38,11 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/post_edit_check.sh"
+            "command": "node .claude/hooks/lint-changed.mjs"
           }
         ]
       }

@@ -1,3 +1,12 @@
+---
+name: excel-import
+description: Excel/CSV/DOCX/PDF/PPTX savol import validatsiya tartibi va ustun formati
+triggers:
+  - import
+  - excel
+  - csv
+  - fayl yuklash
+---
 # Skill: Excel/CSV savol import qilish
 
 ## Kutilgan fayl formati

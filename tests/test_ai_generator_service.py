@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from apps.moderation.models import AiGenerationLog
+from apps.moderation.models import AiGenerationLog, AiProviderSettings
 from apps.users.models import User
 from services.ai_generator_service import create_ai_log, generate_questions
 
@@ -14,47 +14,45 @@ def user(db):
     return User.objects.create(telegram_id=20, username="ai_tester")
 
 
+@pytest.fixture
+def gemini_settings(db):
+    s = AiProviderSettings.load()
+    s.active_provider = AiProviderSettings.Provider.GEMINI
+    s.gemini_api_key = "test-gemini-key"
+    s.gemini_model = "gemini-2.0-flash"
+    s.save()
+    return s
+
+
 # --- create_ai_log ---
 
 @pytest.mark.django_db(transaction=True)
-def test_create_ai_log_success(user):
+def test_create_ai_log_success(user, gemini_settings):
     log = asyncio.run(create_ai_log(user_id=user.id, topic="Matematika", questions_count=10))
 
     assert log is not None
     assert log.user_id == user.id
     assert log.topic == "Matematika"
     assert log.questions_count == 10
-    assert log.model_used != ""
+    assert "gemini" in log.model_used
 
 
 @pytest.mark.django_db(transaction=True)
-def test_create_ai_log_returns_none_for_missing_user():
+def test_create_ai_log_returns_none_for_missing_user(gemini_settings):
     result = asyncio.run(create_ai_log(user_id=999999, topic="Test", questions_count=5))
-
     assert result is None
 
 
-# --- generate_questions ---
+# --- generate_questions helpers ---
 
-def _make_mock_message(questions: list[dict]):
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = json.dumps(questions, ensure_ascii=False)
-
-    thinking_block = MagicMock()
-    thinking_block.type = "thinking"
-
-    mock_message = MagicMock()
-    mock_message.content = [thinking_block, text_block]
-    return mock_message
-
-
-def _make_mock_stream(mock_message):
-    mock_stream = AsyncMock()
-    mock_stream.get_final_message = AsyncMock(return_value=mock_message)
-    mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
-    mock_stream.__aexit__ = AsyncMock(return_value=None)
-    return mock_stream
+def _make_mock_gemini_client(questions: list[dict]):
+    mock_response = MagicMock()
+    mock_response.text = json.dumps(questions, ensure_ascii=False)
+    mock_client = MagicMock()
+    mock_client.aio = MagicMock()
+    mock_client.aio.models = MagicMock()
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+    return mock_client
 
 
 _SAMPLE_QUESTIONS = [
@@ -79,14 +77,11 @@ _SAMPLE_QUESTIONS = [
 ]
 
 
-def test_generate_questions_returns_valid_list():
-    mock_message = _make_mock_message(_SAMPLE_QUESTIONS)
-    mock_stream = _make_mock_stream(mock_message)
+@pytest.mark.django_db
+def test_generate_questions_returns_valid_list(gemini_settings):
+    mock_client = _make_mock_gemini_client(_SAMPLE_QUESTIONS)
 
-    mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
-
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Geografiya", count=2))
 
     assert len(result) == 2
@@ -97,88 +92,61 @@ def test_generate_questions_returns_valid_list():
     assert "difficulty" in result[0]
 
 
-def test_generate_questions_with_material_passes_material_in_prompt():
-    mock_message = _make_mock_message(_SAMPLE_QUESTIONS)
-    mock_stream = _make_mock_stream(mock_message)
-
-    mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
-
+@pytest.mark.django_db
+def test_generate_questions_with_material_passes_material_in_prompt(gemini_settings):
+    mock_client = _make_mock_gemini_client(_SAMPLE_QUESTIONS)
     material = "Bu O'zbekiston tarixi haqida matn. Toshkent poytaxt."
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Tarix", count=2, material=material))
 
     assert len(result) == 2
-    call_kwargs = mock_client.messages.stream.call_args.kwargs
-    user_message = call_kwargs["messages"][0]["content"]
-    assert material in user_message
+    call_args = mock_client.aio.models.generate_content.call_args
+    prompt = call_args.kwargs.get("contents") or call_args.args[1]
+    assert material in prompt
 
 
-def test_generate_questions_skips_invalid_correct_option():
-    bad_questions = [
-        {
-            "question": "Savol?",
-            "option_a": "A",
-            "option_b": "B",
-            "option_c": "C",
-            "option_d": "D",
-            "correct_option": "E",
-            "explanation": "",
-        }
-    ]
-    mock_message = _make_mock_message(bad_questions)
-    mock_stream = _make_mock_stream(mock_message)
-    mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
+@pytest.mark.django_db
+def test_generate_questions_skips_invalid_correct_option(gemini_settings):
+    bad_questions = [{
+        "question": "Savol?",
+        "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+        "correct_option": "E", "explanation": "",
+    }]
+    mock_client = _make_mock_gemini_client(bad_questions)
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Test", count=1))
 
     assert result == []
 
 
-def test_generate_questions_skips_empty_question():
-    bad_questions = [
-        {
-            "question": "",
-            "option_a": "A",
-            "option_b": "B",
-            "option_c": "C",
-            "option_d": "D",
-            "correct_option": "A",
-            "explanation": "",
-        }
-    ]
-    mock_message = _make_mock_message(bad_questions)
-    mock_stream = _make_mock_stream(mock_message)
-    mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
+@pytest.mark.django_db
+def test_generate_questions_skips_empty_question(gemini_settings):
+    bad_questions = [{
+        "question": "",
+        "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+        "correct_option": "A", "explanation": "",
+    }]
+    mock_client = _make_mock_gemini_client(bad_questions)
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Test", count=1))
 
     assert result == []
 
 
-def test_generate_questions_truncates_long_fields():
-    long_questions = [
-        {
-            "question": "x" * 300,
-            "option_a": "y" * 150,
-            "option_b": "B",
-            "option_c": "C",
-            "option_d": "D",
-            "correct_option": "A",
-            "explanation": "z" * 250,
-        }
-    ]
-    mock_message = _make_mock_message(long_questions)
-    mock_stream = _make_mock_stream(mock_message)
-    mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
+@pytest.mark.django_db
+def test_generate_questions_truncates_long_fields(gemini_settings):
+    long_questions = [{
+        "question": "x" * 300,
+        "option_a": "y" * 150, "option_b": "B", "option_c": "C", "option_d": "D",
+        "correct_option": "A",
+        "explanation": "z" * 250,
+    }]
+    mock_client = _make_mock_gemini_client(long_questions)
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Test", count=1))
 
     assert len(result) == 1
@@ -187,37 +155,42 @@ def test_generate_questions_truncates_long_fields():
     assert len(result[0]["explanation"]) == 200
 
 
-def test_generate_questions_returns_empty_on_empty_text():
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = ""
-
-    mock_message = MagicMock()
-    mock_message.content = [text_block]
-
-    mock_stream = _make_mock_stream(mock_message)
+@pytest.mark.django_db
+def test_generate_questions_returns_empty_on_empty_text(gemini_settings):
+    mock_response = MagicMock()
+    mock_response.text = ""
     mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
+    mock_client.aio = MagicMock()
+    mock_client.aio.models = MagicMock()
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Test", count=5))
 
     assert result == []
 
 
-def test_generate_questions_returns_empty_on_invalid_json():
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = "[not valid json"
-
-    mock_message = MagicMock()
-    mock_message.content = [text_block]
-
-    mock_stream = _make_mock_stream(mock_message)
+@pytest.mark.django_db
+def test_generate_questions_returns_empty_on_invalid_json(gemini_settings):
+    mock_response = MagicMock()
+    mock_response.text = "[not valid json"
     mock_client = MagicMock()
-    mock_client.messages.stream.return_value = mock_stream
+    mock_client.aio = MagicMock()
+    mock_client.aio.models = MagicMock()
+    mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
-    with patch("services.ai_generator_service.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
         result = asyncio.run(generate_questions(topic="Test", count=5))
 
+    assert result == []
+
+
+@pytest.mark.django_db
+def test_generate_questions_returns_empty_when_no_api_key(db):
+    s = AiProviderSettings.load()
+    s.active_provider = AiProviderSettings.Provider.GEMINI
+    s.gemini_api_key = ""
+    s.save()
+
+    result = asyncio.run(generate_questions(topic="Test", count=5))
     assert result == []

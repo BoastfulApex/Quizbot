@@ -1,3 +1,11 @@
+---
+name: django-aiogram-hybrid
+description: sync_to_async pattern va Django ORM yagona manba qoidasi
+triggers:
+  - sync_to_async
+  - Django ORM
+  - aiogram + Django
+---
 # Skill: Django + aiogram hybrid arxitektura
 
 Ushbu loyihada bot (aiogram, async) va web admin panel (Django, sync ORM) bitta

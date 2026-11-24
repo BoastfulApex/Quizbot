@@ -3,6 +3,10 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
+class QuestionCountCallback(CallbackData, prefix="qcnt"):
+    count: int
+
+
 class VisibilityCallback(CallbackData, prefix="qvis"):
     value: str
 
@@ -21,6 +25,17 @@ class QuizReadyCallback(CallbackData, prefix="qready"):
 
 class QuizRetryCallback(CallbackData, prefix="qretry"):
     quiz_id: int
+
+
+_COUNT_OPTIONS = [5, 10, 15, 25, 30]
+
+
+def get_question_count_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for n in _COUNT_OPTIONS:
+        builder.button(text=str(n), callback_data=QuestionCountCallback(count=n))
+    builder.adjust(5)
+    return builder.as_markup()
 
 
 def get_visibility_keyboard() -> InlineKeyboardMarkup:

@@ -6,7 +6,12 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards.inline.quiz_inline import VisibilityCallback, get_visibility_keyboard
+from bot.keyboards.inline.quiz_inline import (
+    QuestionCountCallback,
+    VisibilityCallback,
+    get_question_count_keyboard,
+    get_visibility_keyboard,
+)
 from bot.states.ai_generate_states import AiGenerateStates
 from bot.utils.file_reader import SUPPORTED_EXTENSIONS, extract_text
 from bot.utils.limits import MAX_TIME_PER_QUESTION_SEC, MAX_TITLE_LEN, MIN_TIME_PER_QUESTION_SEC
@@ -20,8 +25,6 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="ai_generate")
 
-_MIN_COUNT = 5
-_MAX_COUNT = 20
 _MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 _MAX_MATERIAL_CHARS = 12_000
 
@@ -60,7 +63,8 @@ async def process_topic_text(message: Message, state: FSMContext) -> None:
     await state.update_data(topic=topic, material=None)
     await state.set_state(AiGenerateStates.question_count)
     await message.answer(
-        f"Nechta savol yaratilsin? ({_MIN_COUNT}-{_MAX_COUNT} oralig'ida son kiriting):"
+        "Nechta savol yaratilsin?",
+        reply_markup=get_question_count_keyboard(),
     )
 
 
@@ -103,8 +107,9 @@ async def process_topic_file(message: Message, state: FSMContext, bot: Bot) -> N
     chars = min(len(content), _MAX_MATERIAL_CHARS)
     await message.answer(
         f"✅ Fayl qabul qilindi: <b>{filename}</b> ({chars} belgi o'qildi)\n\n"
-        f"Nechta savol yaratilsin? ({_MIN_COUNT}-{_MAX_COUNT} oralig'ida son kiriting):",
+        f"Nechta savol yaratilsin?",
         parse_mode="HTML",
+        reply_markup=get_question_count_keyboard(),
     )
 
 
@@ -115,17 +120,25 @@ async def process_topic_fallback(message: Message) -> None:
     )
 
 
-@router.message(AiGenerateStates.question_count)
-async def process_question_count(message: Message, state: FSMContext) -> None:
-    text = (message.text or "").strip()
-    if not text.isdigit() or not (_MIN_COUNT <= int(text) <= _MAX_COUNT):
-        await message.answer(
-            f"⚠️ {_MIN_COUNT} dan {_MAX_COUNT} gacha bo'lgan butun son kiriting:"
-        )
-        return
-    await state.update_data(question_count=int(text))
+@router.callback_query(QuestionCountCallback.filter(), AiGenerateStates.question_count)
+async def process_question_count(
+    callback: CallbackQuery, callback_data: QuestionCountCallback, state: FSMContext
+) -> None:
+    await state.update_data(question_count=callback_data.count)
     await state.set_state(AiGenerateStates.visibility)
-    await message.answer("Test ko'rinishini tanlang:", reply_markup=get_visibility_keyboard())
+    await callback.message.edit_text(
+        f"✅ {callback_data.count} ta savol tanlandi.\n\nTest ko'rinishini tanlang:",
+        reply_markup=get_visibility_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.message(AiGenerateStates.question_count)
+async def process_question_count_fallback(message: Message) -> None:
+    await message.answer(
+        "Iltimos, quyidagi tugmalardan birini tanlang:",
+        reply_markup=get_question_count_keyboard(),
+    )
 
 
 @router.message(AiGenerateStates.visibility)
@@ -172,11 +185,7 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
         return
 
     try:
-        questions = await generate_questions(
-            topic=topic,
-            count=count,
-            material=material,
-        )
+        questions = await generate_questions(topic=topic, count=count, material=material)
     except Exception:
         logger.exception("generate_questions xato: user_id=%s, topic=%s", user.id, topic)
         await status_msg.edit_text(
@@ -206,6 +215,7 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
 
     created_count = await bulk_create_questions(quiz.id, questions)
     await create_ai_log(user_id=user.id, topic=topic, questions_count=created_count)
+
 
     visibility_label = "🌐 Ommaviy" if visibility == Quiz.Visibility.PUBLIC else "🔒 Shaxsiy"
     mode_label = "📄 Fayl mazmunidan" if material else "✏️ Mavzu nomidan"

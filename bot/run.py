@@ -16,6 +16,7 @@ from bot.handlers.users.leaderboard import router as leaderboard_router
 from bot.handlers.users.quiz import router as quiz_router
 from bot.handlers.users.quiz_create import router as quiz_create_router
 from bot.handlers.users.settings_handler import router as settings_router
+from bot.handlers.users.group_handler import router as group_router
 from bot.handlers.users.start import router as start_router
 from bot.loader import bot, dp
 
@@ -30,6 +31,7 @@ def register_routers() -> None:
     dp.include_router(settings_router)
     dp.include_router(admin_router)
     dp.include_router(inline_query_router)
+    dp.include_router(group_router)
 
 
 async def main():
