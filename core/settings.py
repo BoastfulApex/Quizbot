@@ -76,7 +76,8 @@ USE_TZ = True
 LOCALE_PATHS = [BASE_DIR / "locales"]
 
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "apps" / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "apps" / "static"] if (BASE_DIR / "apps" / "static").exists() else []
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
