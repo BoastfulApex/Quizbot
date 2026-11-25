@@ -263,7 +263,7 @@ async def process_add_more(callback: CallbackQuery, callback_data: QuizAddMoreCa
     data = await state.get_data()
     total = await count_questions(data["quiz_id"])
     await callback.message.edit_text(
-        f"🎉 Test yaratildi! Jami savollar soni: {total}.\n\nTestni /startTest orqali sinab ko'rishingiz mumkin."
+        f"🎉 Test yaratildi! Jami savollar soni: {total}.\n\nTestni /starttest orqali sinab ko'rishingiz mumkin."
     )
     await state.clear()
     await callback.answer()

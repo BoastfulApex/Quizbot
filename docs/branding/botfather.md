@@ -38,7 +38,7 @@ start - Botni ishga tushirish
 newquiz - Yangi test yaratish
 generate - AI yordamida savollar yaratish
 import - Excel/CSV fayldan import
-startTest - Testni boshlash
+starttest - Testni boshlash
 help - Yordam
 ```
 

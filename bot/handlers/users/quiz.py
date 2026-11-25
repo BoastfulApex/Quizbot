@@ -110,7 +110,7 @@ async def _handle_group_start(message: Message, user, state: FSMContext) -> None
     )
 
 
-@router.message(Command("startTest"))
+@router.message(Command("starttest", ignore_case=True))
 async def cmd_start_test(message: Message, command: CommandObject, state: FSMContext) -> None:
     await _route_start_test(message, command.args, state)
 

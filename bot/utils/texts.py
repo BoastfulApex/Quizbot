@@ -19,7 +19,7 @@ HELP_TEXT = (
     "/newquiz — yangi test yaratish (qo'lda / import / AI)\n"
     "/import — Excel yoki CSV fayldan savollarni import qilish\n"
     "/generate — AI yordamida mavzu bo'yicha savollar generatsiya qilish\n"
-    "/startTest — testni boshlash (shaxsiy chat yoki guruhga qarab)\n"
+    "/starttest — testni boshlash (shaxsiy chat yoki guruhga qarab)\n"
     "/schedule — testni rejalashtirish (bir martalik yoki takrorlanuvchi)\n"
     "/schedules — o'z rejalaringizni ko'rish/boshqarish\n"
     "/leaderboard — reyting jadvali\n"
