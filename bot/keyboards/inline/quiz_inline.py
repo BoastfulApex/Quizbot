@@ -2,6 +2,8 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.keyboards.inline.nav_inline import NavCallback
+
 
 class QuestionCountCallback(CallbackData, prefix="qcnt"):
     count: int
@@ -34,6 +36,19 @@ class MyQuizCallback(CallbackData, prefix="myqz"):
 class QuizExportCallback(CallbackData, prefix="qexp"):
     quiz_id: int
     fmt: str
+
+
+class MyQuizzesListCallback(CallbackData, prefix="myqzl"):
+    pass
+
+
+class QuizDeleteCallback(CallbackData, prefix="qdel"):
+    quiz_id: int
+    confirm: bool = False
+
+
+class CreateMethodCallback(CallbackData, prefix="cmeth"):
+    method: str  # "manual" | "import" | "ai"
 
 
 _COUNT_OPTIONS = [5, 10, 15, 25, 30]
@@ -75,6 +90,8 @@ def get_quiz_list_keyboard(quizzes: list[tuple[int, str]]) -> InlineKeyboardMark
 def get_ready_keyboard(quiz_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Men tayyorman!", callback_data=QuizReadyCallback(quiz_id=quiz_id))
+    builder.button(text="❌ Bekor qilish", callback_data=NavCallback(action="cancel"))
+    builder.adjust(1)
     return builder.as_markup()
 
 
@@ -108,7 +125,27 @@ def get_my_quiz_card_keyboard(quiz_id: int, bot_username: str) -> InlineKeyboard
     )
     builder.button(text="📄 Word (.docx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="docx"))
     builder.button(text="📊 Excel (.xlsx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="xlsx"))
-    builder.adjust(1, 1, 1, 2)
+    builder.button(text="🗑 O'chirish", callback_data=QuizDeleteCallback(quiz_id=quiz_id))
+    builder.button(text="⬅️ Orqaga", callback_data=MyQuizzesListCallback())
+    builder.adjust(1, 1, 1, 2, 2)
+    return builder.as_markup()
+
+
+def get_delete_confirm_keyboard(quiz_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🗑 Ha, o'chirish", callback_data=QuizDeleteCallback(quiz_id=quiz_id, confirm=True))
+    builder.button(text="⬅️ Orqaga", callback_data=MyQuizCallback(quiz_id=quiz_id))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_create_method_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✍️ Qo'lda", callback_data=CreateMethodCallback(method="manual"))
+    builder.button(text="📥 Excel/CSV import", callback_data=CreateMethodCallback(method="import"))
+    builder.button(text="🤖 AI yordamida", callback_data=CreateMethodCallback(method="ai"))
+    builder.button(text="✖️ Yopish", callback_data=NavCallback(action="close"))
+    builder.adjust(1)
     return builder.as_markup()
 
 
@@ -117,6 +154,7 @@ def get_my_quizzes_keyboard(quizzes: list[tuple[int, str]]) -> InlineKeyboardMar
     for quiz_id, title in quizzes:
         label = title if len(title) <= 40 else title[:37] + "..."
         builder.button(text=label, callback_data=MyQuizCallback(quiz_id=quiz_id))
+    builder.button(text="✖️ Yopish", callback_data=NavCallback(action="close"))
     builder.adjust(1)
     return builder.as_markup()
 

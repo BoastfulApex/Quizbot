@@ -12,6 +12,7 @@ from bot.handlers.admins.admin import router as admin_router
 from bot.handlers.users.ai_generate import router as ai_generate_router
 from bot.handlers.users.import_handler import router as import_router
 from bot.handlers.users.my_quizzes import router as my_quizzes_router
+from bot.handlers.users.navigation import router as navigation_router
 from bot.handlers.users.inline_query import router as inline_query_router
 from bot.handlers.users.leaderboard import router as leaderboard_router
 from bot.handlers.users.quiz import router as quiz_router
@@ -20,9 +21,12 @@ from bot.handlers.users.settings_handler import router as settings_router
 from bot.handlers.users.group_handler import router as group_router
 from bot.handlers.users.start import router as start_router
 from bot.loader import bot, dp
+from bot.middlewares.menu_reset import MenuResetMiddleware
 
 
 def register_routers() -> None:
+    dp.message.outer_middleware(MenuResetMiddleware())
+    dp.include_router(navigation_router)
     dp.include_router(start_router)
     dp.include_router(quiz_create_router)
     dp.include_router(import_router)

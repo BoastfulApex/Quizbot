@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from apps.users.models import UserSettings
+from bot.keyboards.inline.nav_inline import NavCallback
 
 
 class SettingsToggleCallback(CallbackData, prefix="stg"):
@@ -17,6 +18,7 @@ def get_settings_keyboard(s: UserSettings) -> InlineKeyboardMarkup:
 
     builder.button(text=notif_label, callback_data=SettingsToggleCallback(field="notifications_on"))
     builder.button(text=share_label, callback_data=SettingsToggleCallback(field="hide_share_button"))
+    builder.button(text="✖️ Yopish", callback_data=NavCallback(action="close"))
     builder.adjust(1)
     return builder.as_markup()
 

@@ -4,13 +4,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards.default.menu import BTN_CREATE_QUIZ
+from bot.keyboards.inline.nav_inline import with_nav
 from bot.keyboards.inline.quiz_inline import (
+    CreateMethodCallback,
     QuizAddMoreCallback,
     VisibilityCallback,
     get_add_more_keyboard,
+    get_create_method_keyboard,
     get_visibility_keyboard,
 )
 from bot.states.quiz_states import QuizCreateStates
+from bot.utils.flow_steps import ask
 from bot.utils.limits import (
     MAX_CATEGORY_LEN,
     MAX_DESC_LEN,
@@ -29,22 +33,43 @@ from services.user_service import get_or_create_user
 router = Router(name="quiz_create")
 
 
-@router.message(F.text == BTN_CREATE_QUIZ, StateFilter(None))
+@router.message(F.chat.type == "private", F.text == BTN_CREATE_QUIZ, StateFilter(None))
 async def guide_create_quiz(message: Message) -> None:
-    await message.answer(GUIDE_CREATE_QUIZ)
+    await message.answer(GUIDE_CREATE_QUIZ, reply_markup=get_create_method_keyboard())
+
+
+@router.callback_query(CreateMethodCallback.filter())
+async def choose_create_method(callback: CallbackQuery, callback_data: CreateMethodCallback, state: FSMContext) -> None:
+    # Oqim boshlovchilari shu yerda import qilinadi — handler modullari orasida aylanma import bo'lmasin.
+    from bot.handlers.users.ai_generate import start_generate_flow
+    from bot.handlers.users.import_handler import start_import_flow
+
+    await callback.answer()
+    await state.clear()
+    if callback_data.method == "manual":
+        await ask(callback.message, state, QuizCreateStates.title, edit=True)
+    elif callback_data.method == "import":
+        await start_import_flow(callback.message, state, edit=True)
+    else:
+        await start_generate_flow(callback.message, state, edit=True)
 
 
 @router.message(Command("newquiz"))
 async def cmd_newquiz(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(QuizCreateStates.title)
-    await message.answer("📝 Yangi test yaratamiz.\n\nAvval test sarlavhasini kiriting (3-255 belgi):")
+    await ask(message, state, QuizCreateStates.title)
 
 
 @router.message(Command("cancel"), StateFilter(QuizCreateStates))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
     await state.clear()
-    await message.answer("❌ Test yaratish bekor qilindi.")
+    quiz_id = data.get("created_quiz_id")
+    total = await count_questions(quiz_id) if quiz_id else 0
+    if total:
+        await message.answer(f"❌ Test yaratish to'xtatildi. Test {total} ta savol bilan saqlandi.")
+    else:
+        await message.answer("❌ Test yaratish bekor qilindi.")
 
 
 @router.message(QuizCreateStates.title)
@@ -54,8 +79,7 @@ async def process_title(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Sarlavha 3-{MAX_TITLE_LEN} belgi orasida bo'lishi kerak. Qayta kiriting:")
         return
     await state.update_data(title=title)
-    await state.set_state(QuizCreateStates.description)
-    await message.answer("Tavsif kiriting (yoki /skip):")
+    await ask(message, state, QuizCreateStates.description)
 
 
 @router.message(QuizCreateStates.description)
@@ -66,8 +90,7 @@ async def process_description(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Tavsif {MAX_DESC_LEN} belgidan oshmasligi kerak. Qayta kiriting:")
         return
     await state.update_data(description=description)
-    await state.set_state(QuizCreateStates.category)
-    await message.answer("Kategoriya kiriting (yoki /skip):")
+    await ask(message, state, QuizCreateStates.category)
 
 
 @router.message(QuizCreateStates.category)
@@ -78,8 +101,7 @@ async def process_category(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Kategoriya {MAX_CATEGORY_LEN} belgidan oshmasligi kerak. Qayta kiriting:")
         return
     await state.update_data(category=category)
-    await state.set_state(QuizCreateStates.difficulty)
-    await message.answer("Qiyinlik darajasini kiriting (masalan: oson/o'rta/qiyin, yoki /skip):")
+    await ask(message, state, QuizCreateStates.difficulty)
 
 
 @router.message(QuizCreateStates.difficulty)
@@ -90,23 +112,18 @@ async def process_difficulty(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Qiyinlik darajasi {MAX_DIFFICULTY_LEN} belgidan oshmasligi kerak. Qayta kiriting:")
         return
     await state.update_data(difficulty=difficulty)
-    await state.set_state(QuizCreateStates.visibility)
-    await message.answer("Test ko'rinishini tanlang:", reply_markup=get_visibility_keyboard())
+    await ask(message, state, QuizCreateStates.visibility)
 
 
 @router.message(QuizCreateStates.visibility)
 async def prompt_visibility_fallback(message: Message) -> None:
-    await message.answer("Iltimos, quyidagi tugmalardan birini tanlang:", reply_markup=get_visibility_keyboard())
+    await message.answer("Iltimos, quyidagi tugmalardan birini tanlang:", reply_markup=with_nav(get_visibility_keyboard()))
 
 
 @router.callback_query(VisibilityCallback.filter(), QuizCreateStates.visibility)
 async def process_visibility(callback: CallbackQuery, callback_data: VisibilityCallback, state: FSMContext) -> None:
     await state.update_data(visibility=callback_data.value)
-    await state.set_state(QuizCreateStates.time_per_question)
-    await callback.message.edit_text(
-        f"⏱ Har bir savol uchun necha soniya beriladi? "
-        f"({MIN_TIME_PER_QUESTION_SEC}-{MAX_TIME_PER_QUESTION_SEC} oralig'ida son kiriting):"
-    )
+    await ask(callback.message, state, QuizCreateStates.time_per_question, edit=True)
     await callback.answer()
 
 
@@ -139,9 +156,9 @@ async def process_time_per_question(message: Message, state: FSMContext) -> None
         await state.clear()
         return
 
-    await state.update_data(quiz_id=quiz.id)
-    await state.set_state(QuizCreateStates.question_text)
-    await message.answer(f"✅ '{quiz.title}' yaratildi.\n\n1-savol matnini kiriting:")
+    await state.update_data(quiz_id=quiz.id, created_quiz_id=quiz.id, question_no=1)
+    await message.answer(f"✅ '{quiz.title}' yaratildi. Endi savollarni kiritamiz.")
+    await ask(message, state, QuizCreateStates.question_text)
 
 
 @router.message(QuizCreateStates.question_text)
@@ -151,8 +168,7 @@ async def process_question_text(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Savol matni bo'sh bo'lmasligi va {MAX_QUESTION_LEN} belgidan oshmasligi kerak:")
         return
     await state.update_data(question_text=text)
-    await state.set_state(QuizCreateStates.question_option_a)
-    await message.answer("A variantini kiriting:")
+    await ask(message, state, QuizCreateStates.question_option_a)
 
 
 @router.message(QuizCreateStates.question_option_a)
@@ -162,8 +178,7 @@ async def process_option_a(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Variant bo'sh bo'lmasligi va {MAX_OPTION_LEN} belgidan oshmasligi kerak:")
         return
     await state.update_data(question_option_a=text)
-    await state.set_state(QuizCreateStates.question_option_b)
-    await message.answer("B variantini kiriting:")
+    await ask(message, state, QuizCreateStates.question_option_b)
 
 
 @router.message(QuizCreateStates.question_option_b)
@@ -173,8 +188,7 @@ async def process_option_b(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Variant bo'sh bo'lmasligi va {MAX_OPTION_LEN} belgidan oshmasligi kerak:")
         return
     await state.update_data(question_option_b=text)
-    await state.set_state(QuizCreateStates.question_option_c)
-    await message.answer("C variantini kiriting:")
+    await ask(message, state, QuizCreateStates.question_option_c)
 
 
 @router.message(QuizCreateStates.question_option_c)
@@ -184,8 +198,7 @@ async def process_option_c(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Variant bo'sh bo'lmasligi va {MAX_OPTION_LEN} belgidan oshmasligi kerak:")
         return
     await state.update_data(question_option_c=text)
-    await state.set_state(QuizCreateStates.question_option_d)
-    await message.answer("D variantini kiriting:")
+    await ask(message, state, QuizCreateStates.question_option_d)
 
 
 @router.message(QuizCreateStates.question_option_d)
@@ -195,8 +208,7 @@ async def process_option_d(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Variant bo'sh bo'lmasligi va {MAX_OPTION_LEN} belgidan oshmasligi kerak:")
         return
     await state.update_data(question_option_d=text)
-    await state.set_state(QuizCreateStates.question_correct)
-    await message.answer("To'g'ri javobni kiriting (A, B, C yoki D):")
+    await ask(message, state, QuizCreateStates.question_correct)
 
 
 @router.message(QuizCreateStates.question_correct)
@@ -206,8 +218,7 @@ async def process_correct_option(message: Message, state: FSMContext) -> None:
         await message.answer("⚠️ Faqat A, B, C yoki D harflaridan birini kiriting:")
         return
     await state.update_data(question_correct=option)
-    await state.set_state(QuizCreateStates.question_explanation)
-    await message.answer("Izoh kiriting (yoki /skip):")
+    await ask(message, state, QuizCreateStates.question_explanation)
 
 
 @router.message(QuizCreateStates.question_explanation)
@@ -234,6 +245,7 @@ async def process_explanation(message: Message, state: FSMContext) -> None:
         return
 
     total = await count_questions(data["quiz_id"])
+    await state.update_data(question_no=total + 1)
     await state.set_state(QuizCreateStates.confirm_add_more)
     await message.answer(
         f"✅ Savol saqlandi. Jami: {total} ta savol.\n\nDavom etasizmi?",
@@ -244,8 +256,7 @@ async def process_explanation(message: Message, state: FSMContext) -> None:
 @router.callback_query(QuizAddMoreCallback.filter(), QuizCreateStates.confirm_add_more)
 async def process_add_more(callback: CallbackQuery, callback_data: QuizAddMoreCallback, state: FSMContext) -> None:
     if callback_data.action == "add":
-        await state.set_state(QuizCreateStates.question_text)
-        await callback.message.edit_text("Keyingi savol matnini kiriting:")
+        await ask(callback.message, state, QuizCreateStates.question_text, edit=True)
         await callback.answer()
         return
 

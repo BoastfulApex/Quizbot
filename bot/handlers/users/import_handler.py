@@ -11,7 +11,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from apps.quizzes.models import Quiz
-from bot.keyboards.inline.import_inline import ImportTargetCallback, get_import_target_keyboard
+from bot.keyboards.inline.import_inline import ImportTargetCallback
+from bot.keyboards.inline.nav_inline import with_nav
 from bot.keyboards.inline.quiz_inline import (
     QuizSelectCallback,
     VisibilityCallback,
@@ -19,6 +20,7 @@ from bot.keyboards.inline.quiz_inline import (
     get_visibility_keyboard,
 )
 from bot.states.import_states import ImportStates
+from bot.utils.flow_steps import ask, nav_for
 from bot.utils.limits import MAX_TIME_PER_QUESTION_SEC, MAX_TITLE_LEN, MIN_TIME_PER_QUESTION_SEC
 from services.import_service import (
     bulk_create_questions,
@@ -40,19 +42,17 @@ _PROGRESS_CHUNK = 200
 _PROGRESS_MIN_INTERVAL = 2.0
 
 
+async def start_import_flow(message: Message, state: FSMContext, *, edit: bool = False) -> None:
+    await state.clear()
+    await ask(message, state, ImportStates.choosing_target, edit=edit)
+
+
 @router.message(Command("import"))
 async def cmd_import(message: Message, state: FSMContext) -> None:
     if message.chat.type != "private":
         await message.answer("⚠️ /import faqat shaxsiy chatda ishlaydi.")
         return
-    await state.clear()
-    await state.set_state(ImportStates.choosing_target)
-    await message.answer(
-        "📥 <b>Testga savollarni import qilish</b>\n\n"
-        "Savollarni yangi testga yoki mavjud testga qo'shasizmi?",
-        parse_mode="HTML",
-        reply_markup=get_import_target_keyboard(),
-    )
+    await start_import_flow(message, state)
 
 
 @router.message(Command("cancel"), StateFilter(ImportStates))
@@ -79,10 +79,7 @@ async def cmd_done_import(message: Message, state: FSMContext) -> None:
 async def process_import_target(callback: CallbackQuery, callback_data: ImportTargetCallback, state: FSMContext) -> None:
     await callback.answer()
     if callback_data.mode == "new":
-        await state.set_state(ImportStates.new_quiz_title)
-        await callback.message.edit_text(
-            f"📝 Yangi test sarlavhasini kiriting (3-{MAX_TITLE_LEN} belgi):"
-        )
+        await ask(callback.message, state, ImportStates.new_quiz_title, edit=True)
     else:
         user = await get_or_create_user(callback.from_user.id, callback.from_user.username)
         if user is None:
@@ -100,7 +97,7 @@ async def process_import_target(callback: CallbackQuery, callback_data: ImportTa
         await state.set_state(ImportStates.choosing_existing_quiz)
         await callback.message.edit_text(
             "📂 Qaysi testga savol qo'shmoqchisiz?",
-            reply_markup=get_quiz_list_keyboard(pairs),
+            reply_markup=nav_for(ImportStates.choosing_existing_quiz, get_quiz_list_keyboard(pairs)),
         )
 
 
@@ -113,10 +110,7 @@ async def process_import_title(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Sarlavha 3-{MAX_TITLE_LEN} belgi orasida bo'lishi kerak. Qayta kiriting:")
         return
     await state.update_data(new_title=title)
-    await state.set_state(ImportStates.new_quiz_time_per_question)
-    await message.answer(
-        f"⏱ Har bir savol uchun necha soniya? ({MIN_TIME_PER_QUESTION_SEC}-{MAX_TIME_PER_QUESTION_SEC}):"
-    )
+    await ask(message, state, ImportStates.new_quiz_time_per_question)
 
 
 @router.message(ImportStates.new_quiz_time_per_question)
@@ -128,13 +122,12 @@ async def process_import_time(message: Message, state: FSMContext) -> None:
         )
         return
     await state.update_data(new_time=int(text))
-    await state.set_state(ImportStates.new_quiz_visibility)
-    await message.answer("Test ko'rinishini tanlang:", reply_markup=get_visibility_keyboard())
+    await ask(message, state, ImportStates.new_quiz_visibility)
 
 
 @router.message(ImportStates.new_quiz_visibility)
 async def prompt_visibility_fallback_import(message: Message) -> None:
-    await message.answer("Iltimos, tugmalardan birini tanlang:", reply_markup=get_visibility_keyboard())
+    await message.answer("Iltimos, tugmalardan birini tanlang:", reply_markup=with_nav(get_visibility_keyboard()))
 
 
 @router.callback_query(VisibilityCallback.filter(), ImportStates.new_quiz_visibility)
@@ -157,7 +150,7 @@ async def process_import_visibility(callback: CallbackQuery, callback_data: Visi
         await callback.message.edit_text("❌ Test yaratishda xatolik. Qayta urinib ko'ring.")
         await state.clear()
         return
-    await state.update_data(quiz_id=quiz.id, quiz_title=quiz.title)
+    await state.update_data(quiz_id=quiz.id, quiz_title=quiz.title, created_quiz_id=quiz.id)
     blocked = await _check_limit_and_set_file_state(callback.message, state, callback.from_user.id, bot, edit=True)
     if blocked:
         return
@@ -271,7 +264,10 @@ async def process_import_file(message: Message, state: FSMContext, bot: Bot) -> 
 
 @router.message(ImportStates.awaiting_file, ~F.document)
 async def awaiting_file_fallback(message: Message) -> None:
-    await message.answer("📎 Iltimos, .xlsx yoki .csv fayl yuboring (yoki /cancel, /done).")
+    await message.answer(
+        "📎 Iltimos, .xlsx yoki .csv fayl yuboring. Import tugagan bo'lsa /done deb yozing.",
+        reply_markup=with_nav(back=False),
+    )
 
 
 # --- yordamchi funksiyalar ---
@@ -332,10 +328,11 @@ async def _check_limit_and_set_file_state(message, state: FSMContext, tg_user_id
         f"📎 Endi <code>.xlsx</code> yoki <code>.csv</code> faylni yuboring.\n"
         f"Import tugagach /done deb yozing."
     )
+    markup = with_nav(back=False)
     if edit:
-        await message.edit_text(text, parse_mode="HTML")
+        await message.edit_text(text, parse_mode="HTML", reply_markup=markup)
     else:
-        await message.answer(text, parse_mode="HTML")
+        await message.answer(text, parse_mode="HTML", reply_markup=markup)
 
     sample = _make_sample_xlsx()
     await bot.send_document(

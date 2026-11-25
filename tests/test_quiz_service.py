@@ -324,3 +324,52 @@ def test_get_quizzes_created_by_excludes_others_public(user, other_user):
     result = asyncio.run(get_quizzes_created_by(user.id))
 
     assert result == []
+
+
+# --- delete_quiz ---
+
+@pytest.mark.django_db(transaction=True)
+def test_delete_quiz_by_owner_deactivates_quiz_and_shares(user):
+    from apps.quizzes.models import Schedule
+    from services.quiz_service import delete_quiz
+
+    quiz = Quiz.objects.create(created_by=user, title="O'chiriladigan")
+    GroupSharedQuiz.objects.create(chat_id=-100, quiz=quiz, shared_by=user)
+    Schedule.objects.create(quiz=quiz, target_chat_id=-100, created_by=user)
+
+    assert asyncio.run(delete_quiz(quiz.id, user)) is True
+
+    quiz.refresh_from_db()
+    assert quiz.is_active is False
+    assert not GroupSharedQuiz.objects.filter(quiz=quiz, is_active=True).exists()
+    assert not Schedule.objects.filter(quiz=quiz, is_active=True).exists()
+    assert asyncio.run(get_quizzes_created_by(user.id)) == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_delete_quiz_rejects_other_user(user, other_user):
+    from services.quiz_service import delete_quiz
+
+    quiz = Quiz.objects.create(created_by=user, title="Begona")
+
+    assert asyncio.run(delete_quiz(quiz.id, other_user)) is False
+    quiz.refresh_from_db()
+    assert quiz.is_active is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_delete_quiz_allows_admin(user):
+    from services.quiz_service import delete_quiz
+
+    admin = User.objects.create(telegram_id=3, username="admin", role=User.Role.ADMIN)
+    quiz = Quiz.objects.create(created_by=user, title="Admin o'chiradi")
+
+    assert asyncio.run(delete_quiz(quiz.id, admin)) is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_delete_quiz_returns_false_when_already_deleted(user):
+    from services.quiz_service import delete_quiz
+
+    quiz = Quiz.objects.create(created_by=user, title="Eski", is_active=False)
+    assert asyncio.run(delete_quiz(quiz.id, user)) is False

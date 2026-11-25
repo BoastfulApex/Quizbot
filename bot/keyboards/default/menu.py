@@ -7,6 +7,10 @@ BTN_LEADERBOARD = "🏆 Reyting"
 BTN_SETTINGS = "⚙️ Sozlamalar"
 BTN_ADMIN_PANEL = "🛠 Admin panel"
 
+MAIN_MENU_BUTTONS = frozenset({
+    BTN_CREATE_QUIZ, BTN_START_TEST, BTN_MY_QUIZZES, BTN_LEADERBOARD, BTN_SETTINGS, BTN_ADMIN_PANEL,
+})
+
 
 def get_main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [

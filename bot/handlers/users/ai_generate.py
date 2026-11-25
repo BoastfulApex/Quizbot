@@ -14,7 +14,9 @@ from bot.keyboards.inline.quiz_inline import (
     get_question_count_keyboard,
     get_visibility_keyboard,
 )
+from bot.keyboards.inline.nav_inline import with_nav
 from bot.states.ai_generate_states import AiGenerateStates
+from bot.utils.flow_steps import ask
 from bot.utils.file_reader import SUPPORTED_EXTENSIONS, extract_text
 from bot.utils.limits import MAX_TIME_PER_QUESTION_SEC, MAX_TITLE_LEN, MIN_TIME_PER_QUESTION_SEC
 from apps.quizzes.models import Quiz
@@ -31,23 +33,17 @@ _MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 _MAX_MATERIAL_CHARS = 12_000
 
 
+async def start_generate_flow(message: Message, state: FSMContext, *, edit: bool = False) -> None:
+    await state.clear()
+    await ask(message, state, AiGenerateStates.topic, edit=edit)
+
+
 @router.message(Command("generate"), StateFilter(None))
 async def cmd_generate(message: Message, state: FSMContext) -> None:
     if message.chat.type != "private":
         await message.answer("⚠️ /generate buyrug'i faqat shaxsiy chatda ishlaydi.")
         return
-    await state.set_state(AiGenerateStates.topic)
-    ext_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
-    await message.answer(
-        "🤖 <b>AI savol generatsiyasi</b>\n\n"
-        "Mavzuni ikki usulda kiritishingiz mumkin:\n\n"
-        "✏️ <b>Mavzu nomi</b> — oddiy matn yozing\n"
-        "(masalan: <i>Matematika</i>, <i>O'zbekiston tarixi</i>)\n\n"
-        f"📄 <b>Hujjat fayli</b> — {ext_list} fayl yuboring\n"
-        "(fayl mazmuniga asoslanib savollar yaratiladi)\n\n"
-        "/cancel — bekor qilish",
-        parse_mode="HTML",
-    )
+    await start_generate_flow(message, state)
 
 
 @router.message(Command("cancel"), StateFilter(AiGenerateStates))
@@ -63,11 +59,7 @@ async def process_topic_text(message: Message, state: FSMContext) -> None:
         await message.answer(f"⚠️ Mavzu nomi 3-{MAX_TITLE_LEN} belgi orasida bo'lishi kerak. Qayta kiriting:")
         return
     await state.update_data(topic=topic, material=None, source_filename="")
-    await state.set_state(AiGenerateStates.question_count)
-    await message.answer(
-        "Nechta savol yaratilsin?",
-        reply_markup=get_question_count_keyboard(),
-    )
+    await ask(message, state, AiGenerateStates.question_count)
 
 
 @router.message(AiGenerateStates.topic, F.document)
@@ -104,21 +96,17 @@ async def process_topic_file(message: Message, state: FSMContext, bot: Bot) -> N
 
     title = filename.rsplit(".", 1)[0][:MAX_TITLE_LEN] or "Fayl asosidagi test"
     await state.update_data(topic=title, material=content[:_MAX_MATERIAL_CHARS], source_filename=filename)
-    await state.set_state(AiGenerateStates.question_count)
-
     chars = min(len(content), _MAX_MATERIAL_CHARS)
-    await message.answer(
-        f"✅ Fayl qabul qilindi: <b>{filename}</b> ({chars} belgi o'qildi)\n\n"
-        f"Nechta savol yaratilsin?",
-        parse_mode="HTML",
-        reply_markup=get_question_count_keyboard(),
-    )
+    await message.answer(f"✅ Fayl qabul qilindi: <b>{filename}</b> ({chars} belgi o'qildi)", parse_mode="HTML")
+    await ask(message, state, AiGenerateStates.question_count)
 
 
 @router.message(AiGenerateStates.topic)
 async def process_topic_fallback(message: Message) -> None:
+    ext_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
     await message.answer(
-        "⚠️ Mavzu nomi (matn) yoki .txt fayl yuboring.\n/cancel — bekor qilish"
+        f"⚠️ Mavzu nomi (matn) yoki {ext_list} fayl yuboring.",
+        reply_markup=with_nav(back=False),
     )
 
 
@@ -127,35 +115,27 @@ async def process_question_count(
     callback: CallbackQuery, callback_data: QuestionCountCallback, state: FSMContext
 ) -> None:
     await state.update_data(question_count=callback_data.count)
-    await state.set_state(AiGenerateStates.visibility)
-    await callback.message.edit_text(
-        f"✅ {callback_data.count} ta savol tanlandi.\n\nTest ko'rinishini tanlang:",
-        reply_markup=get_visibility_keyboard(),
-    )
-    await callback.answer()
+    await ask(callback.message, state, AiGenerateStates.visibility, edit=True)
+    await callback.answer(f"✅ {callback_data.count} ta savol")
 
 
 @router.message(AiGenerateStates.question_count)
 async def process_question_count_fallback(message: Message) -> None:
     await message.answer(
         "Iltimos, quyidagi tugmalardan birini tanlang:",
-        reply_markup=get_question_count_keyboard(),
+        reply_markup=with_nav(get_question_count_keyboard()),
     )
 
 
 @router.message(AiGenerateStates.visibility)
 async def prompt_visibility_fallback(message: Message) -> None:
-    await message.answer("Iltimos, quyidagi tugmalardan birini tanlang:", reply_markup=get_visibility_keyboard())
+    await message.answer("Iltimos, quyidagi tugmalardan birini tanlang:", reply_markup=with_nav(get_visibility_keyboard()))
 
 
 @router.callback_query(VisibilityCallback.filter(), AiGenerateStates.visibility)
 async def process_visibility(callback: CallbackQuery, callback_data: VisibilityCallback, state: FSMContext) -> None:
     await state.update_data(visibility=callback_data.value)
-    await state.set_state(AiGenerateStates.time_per_question)
-    await callback.message.edit_text(
-        f"⏱ Har bir savol uchun necha soniya beriladi? "
-        f"({MIN_TIME_PER_QUESTION_SEC}-{MAX_TIME_PER_QUESTION_SEC} oralig'ida son kiriting):"
-    )
+    await ask(callback.message, state, AiGenerateStates.time_per_question, edit=True)
     await callback.answer()
 
 

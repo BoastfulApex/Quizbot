@@ -31,11 +31,10 @@ HELP_TEXT = (
 
 GUIDE_CREATE_QUIZ = (
     "📝 <b>Test yaratish</b>\n\n"
-    "Test yaratishning uchta usuli bo'ladi:\n"
-    "1️⃣ Qo'lda — savol, 4 variant, to'g'ri javob va izoh kiritish\n"
-    "2️⃣ Import — Excel/CSV fayldan ommaviy yuklash (/import)\n"
-    "3️⃣ AI — mavzuni yozsangiz, savollar avtomatik generatsiya qilinadi (/generate)\n\n"
-    "🚧 Bu funksiya tez orada ishga tushadi."
+    "Usulni tanlang:\n"
+    "✍️ <b>Qo'lda</b> — savol, 4 variant, to'g'ri javob va izohni o'zingiz kiritasiz\n"
+    "📥 <b>Import</b> — Excel/CSV fayldan ko'plab savollarni bir yo'la yuklaysiz\n"
+    "🤖 <b>AI</b> — mavzu yoki hujjat yuborasiz, savollar avtomatik yaratiladi"
 )
 
 GUIDE_START_TEST = (

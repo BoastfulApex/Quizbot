@@ -1,12 +1,13 @@
 import logging
 
 from asgiref.sync import sync_to_async
-from django.db import DatabaseError, IntegrityError
+from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
-from apps.quizzes.models import Answer, Question, Quiz, QuizSession
+from apps.quizzes.models import Answer, GroupSharedQuiz, Question, Quiz, QuizSession, Schedule
 from apps.users.models import User
+from services.user_service import is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,29 @@ def get_quizzes_created_by(user_id: int) -> list[Quiz]:
     except DatabaseError:
         logger.exception("get_quizzes_created_by xato: user_id=%s", user_id)
         return []
+
+
+@sync_to_async
+def delete_quiz(quiz_id: int, user: User) -> bool:
+    """Testni o'chiradi (soft delete): faqat egasi yoki admin. Guruh ulashishlari va rejalar ham o'chadi."""
+    try:
+        with transaction.atomic():
+            quiz = Quiz.objects.select_for_update().get(id=quiz_id, is_active=True)
+            if quiz.created_by_id != user.id and not is_admin_role(user):
+                logger.warning("delete_quiz: egasi emas, quiz_id=%s, user_id=%s", quiz_id, user.id)
+                return False
+            quiz.is_active = False
+            quiz.save(update_fields=["is_active"])
+            GroupSharedQuiz.objects.filter(quiz=quiz, is_active=True).update(
+                is_active=False, unshared_at=timezone.now(), unshared_by=user,
+            )
+            Schedule.objects.filter(quiz=quiz, is_active=True).update(is_active=False)
+        return True
+    except Quiz.DoesNotExist:
+        return False
+    except DatabaseError:
+        logger.exception("delete_quiz xato: quiz_id=%s, user_id=%s", quiz_id, user.id)
+        return False
 
 
 @sync_to_async

@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputPollOption, Message, PollAnswer
 
 from bot.keyboards.default.menu import BTN_START_TEST
+from bot.keyboards.inline.nav_inline import with_nav
 from bot.keyboards.inline.quiz_inline import (
     QuizReadyCallback,
     QuizRetryCallback,
@@ -77,7 +78,7 @@ async def _handle_private_start(message: Message, user, query: str | None, state
             await state.set_state(QuizSelectStates.choosing_quiz)
             await message.answer(
                 "Bir nechta moslik topildi, birini tanlang:",
-                reply_markup=get_quiz_list_keyboard([(q.id, q.title) for q in matches]),
+                reply_markup=with_nav(get_quiz_list_keyboard([(q.id, q.title) for q in matches]), back=False),
             )
             return
         await message.answer("❌ Mos test topilmadi.")
@@ -90,7 +91,7 @@ async def _handle_private_start(message: Message, user, query: str | None, state
     await state.set_state(QuizSelectStates.choosing_quiz)
     await message.answer(
         "Boshlash uchun testni tanlang:",
-        reply_markup=get_quiz_list_keyboard([(q.id, q.title) for q in quizzes]),
+        reply_markup=with_nav(get_quiz_list_keyboard([(q.id, q.title) for q in quizzes]), back=False),
     )
 
 
@@ -105,7 +106,7 @@ async def _handle_group_start(message: Message, user, state: FSMContext) -> None
     await state.set_state(QuizSelectStates.choosing_quiz)
     await message.answer(
         "Qaysi testni boshlaymiz?",
-        reply_markup=get_quiz_list_keyboard([(q.id, q.title) for q in shared]),
+        reply_markup=with_nav(get_quiz_list_keyboard([(q.id, q.title) for q in shared]), back=False),
     )
 
 
@@ -161,7 +162,7 @@ async def _show_ready_card(
         f"⏱ Har bir savol uchun {quiz.time_per_question_sec} soniya\n"
         f"👁 Ovozlar ko'rinadigan bo'ladi\n\n"
         f"Tayyor bo'lganingizda tugmani bosing.\n"
-        f"❌ Bekor qilish uchun /stop yuboring.",
+        f"❌ Bekor qilish uchun pastdagi tugmani bosing yoki /stop yuboring.",
         reply_markup=get_ready_keyboard(quiz_id),
     )
 
