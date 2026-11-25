@@ -3,6 +3,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from google.genai import errors as genai_errors
 
 from apps.moderation.models import AiGenerationLog, AiProviderSettings
 from apps.users.models import User
@@ -90,6 +91,35 @@ def test_generate_questions_returns_valid_list(gemini_settings):
     assert result[1]["correct_option"] == "B"
     assert result[1]["explanation"] == ""
     assert "difficulty" in result[0]
+
+
+@pytest.mark.django_db
+def test_generate_questions_falls_back_on_503(gemini_settings):
+    mock_client = _make_mock_gemini_client(_SAMPLE_QUESTIONS)
+    ok_response = mock_client.aio.models.generate_content.return_value
+    busy = genai_errors.ServerError(503, {"error": {"code": 503, "message": "busy", "status": "UNAVAILABLE"}})
+    mock_client.aio.models.generate_content = AsyncMock(side_effect=[busy, ok_response])
+
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
+        result = asyncio.run(generate_questions(topic="Geografiya", count=2))
+
+    assert len(result) == 2
+    calls = mock_client.aio.models.generate_content.call_args_list
+    assert calls[0].kwargs["model"] == "gemini-2.0-flash"
+    assert calls[1].kwargs["model"] == "gemini-flash-latest"
+
+
+@pytest.mark.django_db
+def test_generate_questions_does_not_fall_back_on_auth_error(gemini_settings):
+    mock_client = _make_mock_gemini_client(_SAMPLE_QUESTIONS)
+    denied = genai_errors.ClientError(401, {"error": {"code": 401, "message": "bad key", "status": "UNAUTHENTICATED"}})
+    mock_client.aio.models.generate_content = AsyncMock(side_effect=denied)
+
+    with patch("services.ai_generator_service.genai.Client", return_value=mock_client):
+        with pytest.raises(genai_errors.ClientError):
+            asyncio.run(generate_questions(topic="Geografiya", count=2))
+
+    assert mock_client.aio.models.generate_content.call_count == 1
 
 
 @pytest.mark.django_db

@@ -6,6 +6,7 @@ import openai
 from asgiref.sync import sync_to_async
 from django.db import DatabaseError
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from apps.moderation.models import AiGenerationLog, AiProviderSettings
@@ -124,18 +125,35 @@ def _parse_questions(text: str, topic: str) -> list[dict]:
     return valid
 
 
+_GEMINI_FALLBACK_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"]
+_GEMINI_RETRYABLE_CODES = {404, 429, 503}
+
+
 async def _generate_gemini(prompt: str, model: str, api_key: str) -> str:
     client = genai.Client(api_key=api_key)
-    response = await client.aio.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=_SYSTEM_PROMPT,
-            temperature=0.7,
-            max_output_tokens=8000,
-        ),
-    )
-    return response.text or ""
+    models = [model] + [m for m in _GEMINI_FALLBACK_MODELS if m != model]
+    last_error: genai_errors.APIError | None = None
+
+    for candidate in models:
+        try:
+            response = await client.aio.models.generate_content(
+                model=candidate,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    temperature=0.7,
+                    max_output_tokens=8000,
+                ),
+            )
+        except genai_errors.APIError as exc:
+            if exc.code not in _GEMINI_RETRYABLE_CODES:
+                raise
+            logger.warning("_generate_gemini: %s modeli %s qaytardi, keyingisi sinaladi", candidate, exc.code)
+            last_error = exc
+            continue
+        return response.text or ""
+
+    raise last_error
 
 
 async def _generate_claude(prompt: str, model: str, api_key: str) -> str:
