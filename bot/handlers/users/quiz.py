@@ -7,7 +7,7 @@ from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputPollOption, Message, PollAnswer
 
-from bot.keyboards.default.menu import BTN_MY_QUIZZES, BTN_START_TEST
+from bot.keyboards.default.menu import BTN_START_TEST
 from bot.keyboards.inline.quiz_inline import (
     QuizReadyCallback,
     QuizRetryCallback,
@@ -18,7 +18,6 @@ from bot.keyboards.inline.quiz_inline import (
 )
 from bot.states.quiz_states import QuizReadyStates, QuizSelectStates
 from bot.utils.quiz_runs import QuizRun, get_run, iter_runs, pop_run, register_run
-from bot.utils.texts import GUIDE_MY_QUIZZES
 from services.quiz_service import (
     find_quiz_by_name_or_id,
     finish_session,
@@ -118,11 +117,6 @@ async def cmd_start_test(message: Message, command: CommandObject, state: FSMCon
 @router.message(F.text == BTN_START_TEST, StateFilter(None))
 async def guide_start_test_button(message: Message, state: FSMContext) -> None:
     await _route_start_test(message, None, state)
-
-
-@router.message(F.text == BTN_MY_QUIZZES)
-async def guide_my_quizzes(message: Message) -> None:
-    await message.answer(GUIDE_MY_QUIZZES)
 
 
 @router.callback_query(QuizSelectCallback.filter(), QuizSelectStates.choosing_quiz)

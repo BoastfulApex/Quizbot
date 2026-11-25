@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards.inline.quiz_inline import (
     QuestionCountCallback,
     VisibilityCallback,
+    get_export_keyboard,
     get_question_count_keyboard,
     get_visibility_keyboard,
 )
@@ -227,7 +228,9 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
         f"👁 Ko'rinish: {visibility_label}\n"
         f"⏱ Har bir savol: {time_per_question} soniya\n\n"
         f"Test ID: <code>{quiz.id}</code>\n"
-        f"/startTest orqali sinab ko'rishingiz mumkin.",
+        f"/startTest orqali sinab ko'rishingiz mumkin.\n\n"
+        f"📥 Testni fayl ko'rinishida olish:",
         parse_mode="HTML",
+        reply_markup=get_export_keyboard(quiz.id),
     )
     await state.clear()

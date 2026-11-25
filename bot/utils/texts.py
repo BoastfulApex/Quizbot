@@ -46,13 +46,6 @@ GUIDE_START_TEST = (
     "🚧 Bu funksiya tez orada ishga tushadi."
 )
 
-GUIDE_MY_QUIZZES = (
-    "📂 <b>Mening testlarim</b>\n\n"
-    "Bu bo'limda siz yaratgan barcha testlarni ko'rasiz: tahrirlash, o'chirish, "
-    "guruhga ulashish yoki rejalashtirish imkoniyati bilan.\n\n"
-    "🚧 Bu funksiya tez orada ishga tushadi."
-)
-
 GUIDE_LEADERBOARD = (
     "🏆 <b>Reyting</b>\n\n"
     "Umumiy yoki test bo'yicha eng yaxshi natijalar ro'yxati — shaxsiy va guruh "

@@ -27,6 +27,15 @@ class QuizRetryCallback(CallbackData, prefix="qretry"):
     quiz_id: int
 
 
+class MyQuizCallback(CallbackData, prefix="myqz"):
+    quiz_id: int
+
+
+class QuizExportCallback(CallbackData, prefix="qexp"):
+    quiz_id: int
+    fmt: str
+
+
 _COUNT_OPTIONS = [5, 10, 15, 25, 30]
 
 
@@ -77,6 +86,23 @@ def get_result_keyboard(quiz_id: int, bot_username: str) -> InlineKeyboardMarkup
         url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}",
     )
     builder.button(text="📤 Testni ulashish", switch_inline_query=f"quiz:{quiz_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_export_keyboard(quiz_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📄 Word (.docx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="docx"))
+    builder.button(text="📊 Excel (.xlsx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="xlsx"))
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_my_quizzes_keyboard(quizzes: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for quiz_id, title in quizzes:
+        label = title if len(title) <= 40 else title[:37] + "..."
+        builder.button(text=label, callback_data=MyQuizCallback(quiz_id=quiz_id))
     builder.adjust(1)
     return builder.as_markup()
 
