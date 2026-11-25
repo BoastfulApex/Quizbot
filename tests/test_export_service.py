@@ -60,17 +60,16 @@ def test_get_exportable_quiz_returns_none_for_inactive(owner, quiz):
 
 
 @pytest.mark.django_db
-def test_build_docx_contains_questions_and_answer_key(quiz):
+def test_build_docx_one_table_per_question_with_correct_answer_first(quiz):
     questions = list(quiz.questions.order_by("id"))
     doc = Document(BytesIO(build_docx(quiz, questions)))
 
-    text = "\n".join(p.text for p in doc.paragraphs)
-    assert "1. Amir Temur qachon tug'ilgan?" in text
-    assert "B) 1370" in text
-    assert "Javoblar kaliti" in text
-    key_rows = [[c.text for c in row.cells] for row in doc.tables[0].rows]
-    assert key_rows[1] == ["1", "A", "1336-yil, Kesh yaqinida."]
-    assert key_rows[2][:2] == ["2", "B"]
+    tables = [[row.cells[0].text for row in table.rows] for table in doc.tables]
+    assert tables == [
+        ["Amir Temur qachon tug'ilgan?", "1336", "1370", "1405", "1220"],
+        ["Mustaqillik yili?", "1991", "1990", "1992", "1989"],
+    ]
+    assert all(len(table.columns) == 1 for table in doc.tables)
 
 
 @pytest.mark.django_db

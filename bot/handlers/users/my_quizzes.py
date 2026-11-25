@@ -80,7 +80,7 @@ async def send_quiz_file(callback: CallbackQuery, callback_data: QuizExportCallb
     await callback.answer("⏳ Fayl tayyorlanmoqda...")
     if callback_data.fmt == "docx":
         content = await asyncio.to_thread(build_docx, quiz, questions)
-        caption = f"📄 {quiz.title} — {len(questions)} ta savol, oxirida javoblar kaliti."
+        caption = f"📄 {quiz.title} — {len(questions)} ta savol. Har savolda 1-javob to'g'ri javob."
     else:
         content = await asyncio.to_thread(build_xlsx, questions)
         caption = f"📊 {quiz.title} — {len(questions)} ta savol. Tahrirlab, /import orqali qayta yuklash mumkin."

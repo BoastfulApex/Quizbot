@@ -5,7 +5,6 @@ from io import BytesIO
 from asgiref.sync import sync_to_async
 from django.db import DatabaseError
 from docx import Document
-from docx.enum.text import WD_BREAK
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
@@ -40,27 +39,21 @@ def export_filename(quiz: Quiz, extension: str) -> str:
     return f"{base or f'test_{quiz.id}'}.{extension}"
 
 
+def _options_correct_first(question: Question) -> list[str]:
+    correct = question.correct_option
+    others = [letter for letter in _OPTION_LETTERS if letter != correct]
+    return [getattr(question, f"option_{letter.lower()}") for letter in [correct, *others]]
+
+
 def build_docx(quiz: Quiz, questions: list[Question]) -> bytes:
     doc = Document()
-    doc.add_heading(quiz.title, level=1)
-    doc.add_paragraph(f"Savollar soni: {len(questions)}")
-
-    for number, question in enumerate(questions, start=1):
-        doc.add_paragraph(f"{number}. {question.question_text}").runs[0].bold = True
-        for letter in _OPTION_LETTERS:
-            doc.add_paragraph(f"{letter}) {getattr(question, f'option_{letter.lower()}')}")
-
-    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-    doc.add_heading("Javoblar kaliti", level=2)
-    table = doc.add_table(rows=1, cols=3)
-    table.style = "Table Grid"
-    for cell, label in zip(table.rows[0].cells, ("№", "Javob", "Izoh")):
-        cell.text = label
-    for number, question in enumerate(questions, start=1):
-        row = table.add_row().cells
-        row[0].text = str(number)
-        row[1].text = question.correct_option
-        row[2].text = question.explanation
+    for question in questions:
+        rows = [question.question_text, *_options_correct_first(question)]
+        table = doc.add_table(rows=len(rows), cols=1)
+        table.style = "Table Grid"
+        for row, text in zip(table.rows, rows):
+            row.cells[0].text = text
+        doc.add_paragraph()
 
     buf = BytesIO()
     doc.save(buf)
