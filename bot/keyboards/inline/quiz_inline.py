@@ -98,6 +98,20 @@ def get_export_keyboard(quiz_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_my_quiz_card_keyboard(quiz_id: int, bot_username: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="▶️ Testni boshlash", callback_data=QuizRetryCallback(quiz_id=quiz_id))
+    builder.button(text="📤 Testni ulashish", switch_inline_query=f"quiz:{quiz_id}")
+    builder.button(
+        text="👥 Guruhda testni boshlash",
+        url=f"https://t.me/{bot_username}?startgroup=quiz_{quiz_id}",
+    )
+    builder.button(text="📄 Word (.docx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="docx"))
+    builder.button(text="📊 Excel (.xlsx)", callback_data=QuizExportCallback(quiz_id=quiz_id, fmt="xlsx"))
+    builder.adjust(1, 1, 1, 2)
+    return builder.as_markup()
+
+
 def get_my_quizzes_keyboard(quizzes: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for quiz_id, title in quizzes:

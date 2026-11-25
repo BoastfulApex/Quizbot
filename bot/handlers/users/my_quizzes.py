@@ -1,14 +1,14 @@
 import asyncio
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from bot.keyboards.default.menu import BTN_MY_QUIZZES
 from bot.keyboards.inline.quiz_inline import (
     MyQuizCallback,
     QuizExportCallback,
-    get_export_keyboard,
+    get_my_quiz_card_keyboard,
     get_my_quizzes_keyboard,
 )
 from services.export_service import build_docx, build_xlsx, export_filename, get_exportable_quiz
@@ -36,14 +36,14 @@ async def show_my_quizzes(message: Message) -> None:
     shown = quizzes[:_MAX_LISTED_QUIZZES]
     note = f"\n<i>Oxirgi {len(shown)} ta test ko'rsatildi.</i>" if len(quizzes) > len(shown) else ""
     await message.answer(
-        f"📂 <b>Mening testlarim</b>\n\nFaylni olish uchun testni tanlang:{note}",
+        f"📂 <b>Mening testlarim</b>\n\nBoshlash, ulashish yoki fayl olish uchun testni tanlang:{note}",
         parse_mode="HTML",
         reply_markup=get_my_quizzes_keyboard([(q.id, q.title) for q in shown]),
     )
 
 
 @router.callback_query(MyQuizCallback.filter())
-async def show_quiz_card(callback: CallbackQuery, callback_data: MyQuizCallback) -> None:
+async def show_quiz_card(callback: CallbackQuery, callback_data: MyQuizCallback, bot: Bot) -> None:
     user = await get_or_create_user(callback.from_user.id, callback.from_user.username)
     result = await get_exportable_quiz(callback_data.quiz_id, user) if user else None
     if result is None:
@@ -51,10 +51,15 @@ async def show_quiz_card(callback: CallbackQuery, callback_data: MyQuizCallback)
         return
 
     quiz, questions = result
+    me = await bot.me()
     await callback.message.answer(
-        f"📋 <b>{quiz.title}</b>\n❓ {len(questions)} ta savol\n\nQaysi formatda yuklab olasiz?",
+        f"📋 <b>{quiz.title}</b>\n"
+        f"❓ {len(questions)} ta savol\n"
+        f"⏱ Har bir savol uchun {quiz.time_per_question_sec} soniya\n\n"
+        f"📤 <b>Ulashish</b> — istalgan chatga test kartasini yuboradi.\n"
+        f"👥 <b>Guruhda boshlash</b> — guruhni tanlaysiz, test o'sha yerda boshlanadi.",
         parse_mode="HTML",
-        reply_markup=get_export_keyboard(quiz.id),
+        reply_markup=get_my_quiz_card_keyboard(quiz.id, me.username),
     )
     await callback.answer()
 
