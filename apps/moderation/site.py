@@ -4,8 +4,8 @@ from django.utils import timezone
 
 
 class QuizBotAdminSite(admin.AdminSite):
-    site_header = "QuizBot Admin"
-    site_title = "QuizBot"
+    site_header = "Savolgo Admin"
+    site_title = "Savolgo"
     index_title = "Boshqaruv paneli"
 
     def index(self, request, extra_context=None):

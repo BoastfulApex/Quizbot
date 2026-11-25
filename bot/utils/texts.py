@@ -1,6 +1,6 @@
 WELCOME_TEXT = (
     "👋 Assalomu alaykum, {name}!\n\n"
-    "<b>QuizBot</b> — test-viktorina boti. Quyidagi menyu orqali botning "
+    "<b>Savolgo</b> — test-viktorina boti. Quyidagi menyu orqali botning "
     "imkoniyatlaridan foydalanishingiz mumkin:\n\n"
     "📝 <b>Test yaratish</b> — o'z testingizni yaratish (qo'lda, Excel/CSV import yoki AI orqali)\n"
     "▶️ <b>Test boshlash</b> — mavjud testlardan birini ishlash\n"
@@ -11,7 +11,7 @@ WELCOME_TEXT = (
 )
 
 HELP_TEXT = (
-    "<b>QuizBot buyruqlari:</b>\n\n"
+    "<b>Savolgo buyruqlari:</b>\n\n"
     "/start — botni ishga tushirish va asosiy menyuni ko'rsatish\n"
     "/help — ushbu yordam xabari\n"
     "/newquiz — yangi test yaratish (qo'lda / import / AI)\n"
