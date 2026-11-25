@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.urls import reverse
 from django.utils import timezone
 
 
@@ -23,6 +24,10 @@ class QuizBotAdminSite(admin.AdminSite):
             "openai": ai_settings.openai_model,
         }
 
+        failed = AiGenerationLog.objects.filter(status=AiGenerationLog.Status.FAILED)
+        ai_week = AiGenerationLog.objects.filter(created_at__gte=week_start).count()
+        ai_failed_week = failed.filter(created_at__gte=week_start).count()
+
         stats = {
             "total_users": User.objects.count(),
             "users_today": User.objects.filter(created_at__gte=today_start).count(),
@@ -35,6 +40,13 @@ class QuizBotAdminSite(admin.AdminSite):
             "ai_quizzes": Quiz.objects.filter(source=Quiz.Source.AI).count(),
             "total_ai_logs": AiGenerationLog.objects.count(),
             "ai_today": AiGenerationLog.objects.filter(created_at__gte=today_start).count(),
+            "ai_failed_today": failed.filter(created_at__gte=today_start).count(),
+            "ai_week": ai_week,
+            "ai_failed_week": ai_failed_week,
+            "ai_success_rate": round(100 * (ai_week - ai_failed_week) / ai_week) if ai_week else 100,
+            "recent_failures": list(failed.filter(created_at__gte=week_start).select_related("user")[:6]),
+            "ai_failed_url": reverse("admin:moderation_aigenerationlog_changelist", current_app=self.name)
+                             + f"?status__exact={AiGenerationLog.Status.FAILED}",
             "active_provider": ai_settings.get_active_provider_display(),
             "active_model": model_map.get(ai_settings.active_provider, "—"),
         }

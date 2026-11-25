@@ -23,7 +23,7 @@ To'liq talablar: [docs/TZ.md](docs/TZ.md).
 4. Migratsiyalarni bajaring: `docker-compose run --rm web python manage.py migrate`.
 5. Web admin va botni ishga tushiring: `docker-compose up web bot`.
 
-Admin panel: `http://localhost:8000/admin/` (superuser yaratish uchun:
+Admin panel: `http://localhost:8000/panel/` (superuser yaratish uchun:
 `docker-compose run --rm web python manage.py createsuperuser`).
 
 ## Testlar

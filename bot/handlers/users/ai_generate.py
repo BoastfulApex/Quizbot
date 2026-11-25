@@ -1,4 +1,5 @@
 import logging
+import time
 from io import BytesIO
 
 from aiogram import Bot, F, Router
@@ -17,7 +18,7 @@ from bot.states.ai_generate_states import AiGenerateStates
 from bot.utils.file_reader import SUPPORTED_EXTENSIONS, extract_text
 from bot.utils.limits import MAX_TIME_PER_QUESTION_SEC, MAX_TITLE_LEN, MIN_TIME_PER_QUESTION_SEC
 from apps.quizzes.models import Quiz
-from services.ai_generator_service import generate_questions, create_ai_log
+from services.ai_generator_service import create_ai_log, generate_questions_detailed
 from services.import_service import bulk_create_questions
 from services.quiz_service import create_quiz
 from services.user_service import get_or_create_user
@@ -61,7 +62,7 @@ async def process_topic_text(message: Message, state: FSMContext) -> None:
     if not (3 <= len(topic) <= MAX_TITLE_LEN):
         await message.answer(f"⚠️ Mavzu nomi 3-{MAX_TITLE_LEN} belgi orasida bo'lishi kerak. Qayta kiriting:")
         return
-    await state.update_data(topic=topic, material=None)
+    await state.update_data(topic=topic, material=None, source_filename="")
     await state.set_state(AiGenerateStates.question_count)
     await message.answer(
         "Nechta savol yaratilsin?",
@@ -102,7 +103,7 @@ async def process_topic_file(message: Message, state: FSMContext, bot: Bot) -> N
         return
 
     title = filename.rsplit(".", 1)[0][:MAX_TITLE_LEN] or "Fayl asosidagi test"
-    await state.update_data(topic=title, material=content[:_MAX_MATERIAL_CHARS])
+    await state.update_data(topic=title, material=content[:_MAX_MATERIAL_CHARS], source_filename=filename)
     await state.set_state(AiGenerateStates.question_count)
 
     chars = min(len(content), _MAX_MATERIAL_CHARS)
@@ -173,6 +174,7 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
     count: int = data["question_count"]
     visibility: str = data["visibility"]
     material: str | None = data.get("material")
+    source_filename: str = data.get("source_filename") or ""
 
     source_label = "📄 Fayl asosida" if material else f"✏️ Mavzu: {topic}"
     status_msg = await message.answer(
@@ -185,22 +187,28 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
         await state.clear()
         return
 
-    try:
-        questions = await generate_questions(topic=topic, count=count, material=material)
-    except Exception:
-        logger.exception("generate_questions xato: user_id=%s, topic=%s", user.id, topic)
-        await status_msg.edit_text(
-            "❌ AI bilan bog'lanishda xatolik yuz berdi. Keyinroq urinib ko'ring."
-        )
-        await state.clear()
-        return
+    started = time.monotonic()
+    result = await generate_questions_detailed(topic=topic, count=count, material=material)
+    log_kwargs = {
+        "requested_count": count,
+        "model_used": result.model_used,
+        "source_filename": source_filename,
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
 
-    if not questions:
+    if not result.questions:
+        await create_ai_log(
+            user_id=user.id, topic=topic, questions_count=0,
+            error_message=result.error_message or "Noma'lum sabab",
+            error_details=result.error_details, **log_kwargs,
+        )
         await status_msg.edit_text(
-            "❌ AI savollarni yarata olmadi. Boshqa mavzu yoki fayl bilan urinib ko'ring."
+            "❌ AI savollarni yarata olmadi. Keyinroq yoki boshqa mavzu/fayl bilan urinib ko'ring.\n"
+            "Xatolik sababi administratorga yuborildi."
         )
         await state.clear()
         return
+    questions = result.questions
 
     quiz = await create_quiz(
         created_by=user,
@@ -215,7 +223,7 @@ async def process_time_and_generate(message: Message, state: FSMContext) -> None
         return
 
     created_count = await bulk_create_questions(quiz.id, questions)
-    await create_ai_log(user_id=user.id, topic=topic, questions_count=created_count)
+    await create_ai_log(user_id=user.id, topic=topic, questions_count=created_count, **log_kwargs)
 
 
     visibility_label = "🌐 Ommaviy" if visibility == Quiz.Visibility.PUBLIC else "🔒 Shaxsiy"

@@ -91,9 +91,62 @@ class ImportLogAdmin(admin.ModelAdmin):
 
 @admin.register(AiGenerationLog, site=admin_site)
 class AiGenerationLogAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "topic", "questions_count", "model_used", "created_at")
-    list_filter = ("model_used", "created_at")
-    search_fields = ("topic", "user__username")
+    list_display = ("created_at", "user", "source_display", "status_badge", "count_display",
+                    "model_used", "duration_display", "short_error")
+    list_display_links = ("created_at", "source_display")
+    list_filter = ("status", "model_used", "created_at")
+    search_fields = ("topic", "source_filename", "error_message", "user__username", "user__telegram_id")
+    date_hierarchy = "created_at"
+    list_select_related = ("user",)
+    list_per_page = 50
+    fieldsets = (
+        (None, {"fields": ("status_badge", "created_at", "user", "topic", "source_filename")}),
+        ("Natija", {"fields": ("requested_count", "questions_count", "model_used", "duration_display")}),
+        ("Xatolik", {"fields": ("error_message", "error_details_pre")}),
+    )
+    readonly_fields = ("status_badge", "created_at", "user", "topic", "source_filename", "requested_count",
+                       "questions_count", "model_used", "duration_display", "error_message", "error_details_pre")
+
+    @admin.display(description="Manba")
+    def source_display(self, obj):
+        if obj.source_filename:
+            return f"📄 {obj.source_filename}"
+        return f"✏️ {obj.topic}"
+
+    @admin.display(description="Holat", ordering="status")
+    def status_badge(self, obj):
+        if obj.status == AiGenerationLog.Status.FAILED:
+            return format_html('<span class="qb-badge qb-badge--bad">✗ Xatolik</span>')
+        return format_html('<span class="qb-badge qb-badge--ok">✓ Muvaffaqiyatli</span>')
+
+    @admin.display(description="Savollar")
+    def count_display(self, obj):
+        if obj.requested_count:
+            return f"{obj.questions_count} / {obj.requested_count}"
+        return obj.questions_count
+
+    @admin.display(description="Davomiylik", ordering="duration_ms")
+    def duration_display(self, obj):
+        return f"{obj.duration_ms / 1000:.1f} s" if obj.duration_ms else "—"
+
+    @admin.display(description="Xatolik sababi")
+    def short_error(self, obj):
+        if not obj.error_message:
+            return "—"
+        text = obj.error_message if len(obj.error_message) <= 90 else obj.error_message[:87] + "..."
+        return format_html('<span class="qb-error-text">{}</span>', text)
+
+    @admin.display(description="Texnik tafsilot")
+    def error_details_pre(self, obj):
+        if not obj.error_details:
+            return "—"
+        return format_html('<pre class="qb-trace">{}</pre>', obj.error_details)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Report, site=admin_site)

@@ -2,48 +2,72 @@
 {% load i18n %}
 
 {% block content %}
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
-  <div style="background:#1a73e8;color:#fff;border-radius:8px;padding:20px;">
-    <div style="font-size:32px;font-weight:700;">{{ stats.total_users }}</div>
-    <div style="opacity:.85;margin-top:4px;">👤 Jami foydalanuvchilar</div>
-    <div style="font-size:12px;opacity:.7;margin-top:8px;">Bugun +{{ stats.users_today }} · Hafta +{{ stats.users_week }}</div>
+<div class="qb-dash">
+  <div class="qb-stats">
+    <div class="qb-card">
+      <div class="qb-stat__label"><span class="qb-stat__icon">👤</span>Foydalanuvchilar</div>
+      <div class="qb-stat__value">{{ stats.total_users }}</div>
+      <div class="qb-stat__meta">Bugun <b>+{{ stats.users_today }}</b> · 7 kun <b>+{{ stats.users_week }}</b></div>
+    </div>
+    <div class="qb-card">
+      <div class="qb-stat__label"><span class="qb-stat__icon">👥</span>Guruhlar</div>
+      <div class="qb-stat__value">{{ stats.total_groups }}</div>
+      <div class="qb-stat__meta">Bot faol: <b>{{ stats.active_groups }}</b></div>
+    </div>
+    <div class="qb-card">
+      <div class="qb-stat__label"><span class="qb-stat__icon">📚</span>Testlar</div>
+      <div class="qb-stat__value">{{ stats.total_quizzes }}</div>
+      <div class="qb-stat__meta">Qo'lda {{ stats.manual_quizzes }} · Import {{ stats.import_quizzes }} · AI {{ stats.ai_quizzes }}</div>
+    </div>
+    <div class="qb-card">
+      <div class="qb-stat__label"><span class="qb-stat__icon">🤖</span>AI generatsiyalar</div>
+      <div class="qb-stat__value">{{ stats.total_ai_logs }}</div>
+      <div class="qb-stat__meta">Bugun <b>+{{ stats.ai_today }}</b> · xato <b class="qb-neg">{{ stats.ai_failed_today }}</b></div>
+    </div>
   </div>
-  <div style="background:#0f9d58;color:#fff;border-radius:8px;padding:20px;">
-    <div style="font-size:32px;font-weight:700;">{{ stats.total_groups }}</div>
-    <div style="opacity:.85;margin-top:4px;">👥 Jami guruhlar</div>
-    <div style="font-size:12px;opacity:.7;margin-top:8px;">Faol: {{ stats.active_groups }}</div>
-  </div>
-  <div style="background:#f4b400;color:#fff;border-radius:8px;padding:20px;">
-    <div style="font-size:32px;font-weight:700;">{{ stats.total_quizzes }}</div>
-    <div style="opacity:.85;margin-top:4px;">📚 Jami testlar</div>
-    <div style="font-size:12px;opacity:.7;margin-top:8px;">AI: {{ stats.ai_quizzes }} · Import: {{ stats.import_quizzes }}</div>
-  </div>
-  <div style="background:#db4437;color:#fff;border-radius:8px;padding:20px;">
-    <div style="font-size:32px;font-weight:700;">{{ stats.total_ai_logs }}</div>
-    <div style="opacity:.85;margin-top:4px;">🤖 AI generatsiyalar</div>
-    <div style="font-size:12px;opacity:.7;margin-top:8px;">Bugun +{{ stats.ai_today }}</div>
-  </div>
-</div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
-  <div style="background:var(--darkened-bg,#f8f8f8);border:1px solid var(--border-color,#ddd);border-radius:8px;padding:16px;">
-    <h3 style="margin:0 0 12px;font-size:14px;text-transform:uppercase;opacity:.6;">Testlar manba bo'yicha</h3>
-    <table style="width:100%;border-collapse:collapse;">
-      <tr><td style="padding:4px 0;">✏️ Qo'lda yaratilgan</td><td style="text-align:right;font-weight:600;">{{ stats.manual_quizzes }}</td></tr>
-      <tr><td style="padding:4px 0;">📄 Import qilingan</td><td style="text-align:right;font-weight:600;">{{ stats.import_quizzes }}</td></tr>
-      <tr><td style="padding:4px 0;">🤖 AI yaratgan</td><td style="text-align:right;font-weight:600;">{{ stats.ai_quizzes }}</td></tr>
-    </table>
-  </div>
-  <div style="background:var(--darkened-bg,#f8f8f8);border:1px solid var(--border-color,#ddd);border-radius:8px;padding:16px;">
-    <h3 style="margin:0 0 12px;font-size:14px;text-transform:uppercase;opacity:.6;">Faol AI provayder</h3>
-    <div style="font-size:24px;font-weight:700;margin-bottom:8px;">{{ stats.active_provider }}</div>
-    <div style="font-size:13px;opacity:.7;">Model: {{ stats.active_model }}</div>
-    <div style="margin-top:12px;">
-      <a href="/admin/moderation/aiprovidersettings/1/change/" style="font-size:13px;color:#1a73e8;">⚙️ Sozlamalarni o'zgartirish →</a>
+  <div class="qb-row">
+    <div class="qb-card">
+      <div class="qb-card__head">
+        <h2 class="qb-card__title">Oxirgi AI xatolari</h2>
+        <a class="qb-card__link" href="{{ stats.ai_failed_url }}">Barchasi →</a>
+      </div>
+      {% if stats.recent_failures %}
+        <ul class="qb-fail-list">
+          {% for log in stats.recent_failures %}
+            <li>
+              <a class="qb-fail__topic" href="{% url 'admin:moderation_aigenerationlog_change' log.pk %}">
+                {% if log.source_filename %}📄 {{ log.source_filename }}{% else %}✏️ {{ log.topic }}{% endif %}
+              </a>
+              <span class="qb-fail__time">{{ log.created_at|date:"d.m H:i" }} · {{ log.model_used|default:"—" }}</span>
+              <span class="qb-fail__reason">{{ log.error_message|truncatechars:160 }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="qb-empty">✅ Oxirgi 7 kunda AI xatolari yo'q.</div>
+      {% endif %}
+    </div>
+
+    <div class="qb-card">
+      <div class="qb-card__head">
+        <h2 class="qb-card__title">Faol AI provayder</h2>
+        <a class="qb-card__link" href="{% url 'admin:moderation_aiprovidersettings_changelist' %}">Sozlash →</a>
+      </div>
+      <div class="qb-provider__name">{{ stats.active_provider }}</div>
+      <div class="qb-provider__model">{{ stats.active_model }}</div>
+      <div class="qb-meter" title="7 kunlik muvaffaqiyat"><span style="width: {{ stats.ai_success_rate }}%"></span></div>
+      <div class="qb-stat__meta">7 kunlik muvaffaqiyat: <b>{{ stats.ai_success_rate }}%</b></div>
+      <div style="margin-top: 12px;">
+        <div class="qb-kv"><span>7 kunda so'rovlar</span><span>{{ stats.ai_week }}</span></div>
+        <div class="qb-kv"><span>7 kunda xatolar</span><span class="qb-error-text">{{ stats.ai_failed_week }}</span></div>
+      </div>
     </div>
   </div>
 </div>
 
-<div style="margin-bottom:8px;font-size:13px;opacity:.6;text-transform:uppercase;font-weight:600;">Tizim bo'limlari</div>
-{% include "admin/app_list.html" with app_list=app_list %}
+<h2 class="qb-section-title">Bo'limlar</h2>
+{% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
 {% endblock %}
+
+{% block sidebar %}{% endblock %}

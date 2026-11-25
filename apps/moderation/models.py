@@ -17,7 +17,7 @@ class AiProviderSettings(models.Model):
         verbose_name="Faol AI provayder",
     )
     gemini_api_key = models.CharField(max_length=500, blank=True, verbose_name="Gemini API kaliti")
-    gemini_model = models.CharField(max_length=100, default="gemini-2.0-flash", verbose_name="Gemini modeli")
+    gemini_model = models.CharField(max_length=100, default="gemini-flash-lite-latest", verbose_name="Gemini modeli")
     claude_api_key = models.CharField(max_length=500, blank=True, verbose_name="Claude API kaliti")
     claude_model = models.CharField(max_length=100, default="claude-opus-4-8", verbose_name="Claude modeli")
     openai_api_key = models.CharField(max_length=500, blank=True, verbose_name="OpenAI API kaliti")
@@ -109,14 +109,29 @@ class ImportLog(models.Model):
 
 
 class AiGenerationLog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ai_generation_logs")
-    topic = models.CharField(max_length=255)
-    questions_count = models.PositiveIntegerField(default=0)
-    model_used = models.CharField(max_length=100, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Muvaffaqiyatli"
+        FAILED = "failed", "Xatolik"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ai_generation_logs",
+                             verbose_name="Foydalanuvchi")
+    topic = models.CharField(max_length=255, verbose_name="Mavzu")
+    source_filename = models.CharField(max_length=255, blank=True, verbose_name="Fayl")
+    requested_count = models.PositiveIntegerField(default=0, verbose_name="So'ralgan savollar")
+    questions_count = models.PositiveIntegerField(default=0, verbose_name="Yaratilgan savollar")
+    model_used = models.CharField(max_length=100, blank=True, verbose_name="Model")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS,
+                              db_index=True, verbose_name="Holat")
+    error_message = models.TextField(blank=True, verbose_name="Xatolik sababi")
+    error_details = models.TextField(blank=True, verbose_name="Texnik tafsilot")
+    duration_ms = models.PositiveIntegerField(default=0, verbose_name="Davomiylik (ms)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Vaqt")
 
     class Meta:
         db_table = "ai_generation_logs"
+        verbose_name = "AI generatsiya"
+        verbose_name_plural = "AI generatsiyalar"
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"AiGenerationLog({self.user_id}, {self.topic})"

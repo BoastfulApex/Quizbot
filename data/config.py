@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     DJANGO_DEBUG: bool = False
     DJANGO_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = ["localhost", "127.0.0.1"]
 
+    # Admin panel manzili ("/admin/" emas). .env da ADMIN_URL=... bilan o'zgartirish mumkin.
+    ADMIN_URL: str = "panel/"
+
+    @field_validator("ADMIN_URL")
+    @classmethod
+    def normalize_admin_url(cls, value: str) -> str:
+        value = value.strip().strip("/")
+        if not value or value == "admin":
+            raise ValueError("ADMIN_URL bo'sh yoki 'admin' bo'lmasligi kerak")
+        return f"{value}/"
+
     @field_validator("ADMIN_IDS", "DJANGO_ALLOWED_HOSTS", mode="before")
     @classmethod
     def split_csv(cls, value):
