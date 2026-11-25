@@ -1,13 +1,15 @@
 WELCOME_TEXT = (
-    "👋 Assalomu alaykum, {name}!\n\n"
-    "<b>Savolgo</b> — test-viktorina boti. Quyidagi menyu orqali botning "
-    "imkoniyatlaridan foydalanishingiz mumkin:\n\n"
-    "📝 <b>Test yaratish</b> — o'z testingizni yaratish (qo'lda, Excel/CSV import yoki AI orqali)\n"
-    "▶️ <b>Test boshlash</b> — mavjud testlardan birini ishlash\n"
-    "📂 <b>Mening testlarim</b> — o'zingiz yaratgan testlarni ko'rish/boshqarish\n"
-    "🏆 <b>Reyting</b> — eng yaxshi natijalar\n"
-    "⚙️ <b>Sozlamalar</b> — bot sozlamalarini boshqarish\n\n"
-    "Barcha buyruqlar ro'yxati uchun /help yuboring."
+    "👋 Assalomu alaykum, <b>{name}</b>!\n\n"
+    "<b>Savolgo</b> ga xush kelibsiz — bu yerda test yaratasiz, do'stlaringiz bilan "
+    "bellashasiz va bilimingizni sinaysiz.\n\n"
+    "✨ <b>Nimalar qila olasiz:</b>\n"
+    "📝 Testni qo'lda, Excel/CSV fayldan yoki 🤖 AI yordamida bir necha soniyada yaratish\n"
+    "📄 Word, PDF yoki PowerPoint hujjatdan avtomatik savollar tuzish\n"
+    "👥 Testni guruhda boshlab, a'zolar bilan bellashish\n"
+    "📤 Testni ulashish va Word/Excel fayl qilib yuklab olish\n\n"
+    "👇 Boshlash uchun pastdagi menyudan <b>📝 Test yaratish</b> yoki "
+    "<b>▶️ Test boshlash</b> ni tanlang.\n"
+    "Barcha buyruqlar: /help"
 )
 
 HELP_TEXT = (
